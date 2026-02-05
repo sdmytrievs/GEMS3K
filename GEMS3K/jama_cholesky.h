@@ -95,12 +95,10 @@ Array2D<Real> Cholesky<Real>::getL() const
 template <class Real>
 Cholesky<Real>::Cholesky(const Array2D<Real> &A)
 {
-
-
-   	int m = A.dim1();
+    int m = A.dim1();
 	int n = A.dim2();
 
-	isspd = (m == n);
+    isspd = (m == n);
 
 	if (m != n)
 	{
@@ -124,10 +122,11 @@ Cholesky<Real>::Cholesky(const Array2D<Real> &A)
             }
             L_[j][k] = s = (A[j][k] - s)/L_[k][k];  // Zerodivide detected !
             d = d + s*s;
-            isspd = isspd && essentiallyEqual(A[k][j], A[j][k]);
+            isspd = isspd && (A[k][j] == A[j][k]);
          }
          d = A[j][j] - d;
          isspd = isspd && (d > 0.0);
+
 //         if( !isspd ) // Added SD 29/11/2006
 //             return;
 //        L_[j][j] = sqrt(d > 0.0 ? d : 0.0);

@@ -732,6 +732,9 @@ long int TMultiBase::MassBalanceRefinement( long int WhereCalledFrom )
 //               CalculateConcentrations( pm.X, pm.XF, pm.XFA );
                CalculateActivityCoefficients( LINK_UX_MODE);
            }
+           if(iRet==1) {
+               iRet=0;  // no SLE solution on internal iterations SD 02/2026
+           }
            return iRet;       // mass balance refinement finished OK
        }
 
@@ -1336,6 +1339,15 @@ long int TMultiBase::MakeAndSolveSystemOfLinearEquations( long int N, bool initA
    for( ii = 0; ii < N; ii++ )
      B[ii] = BB[ii];
 #endif
+
+  // std::cout << "MakeAndSolveSystemOfLinearEquations" << std::endl;
+  // for(int ii=0; ii<N; ++ii) {
+  //      for(jj=0; jj<N; ++jj) {
+  //        std::cout << A[ii][jj] << " ";
+  //      }
+  //      std::cout << " = " << BB[ii]  << std::endl;
+  // }
+
 // From here on, the NIST TNT Jama/C++ linear algebra package is used
 //    (credit: http://math.nist.gov/tnt/download.html)
 // this routine constructs the Cholesky decomposition, A = L x LT .
