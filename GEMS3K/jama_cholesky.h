@@ -61,6 +61,11 @@ public:
 	Array1D<Real> solve(const Array1D<Real> &B);
 	Array2D<Real> solve(const Array2D<Real> &B);
 	int is_spd() const;
+    std::string to_string() const
+    {
+        std::string buf = "Cholesky  Decomposition\n";
+        return buf+L_.to_string();
+    }
 
 };
 

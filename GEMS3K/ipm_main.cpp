@@ -750,6 +750,7 @@ long int TMultiBase::MassBalanceRefinement( long int WhereCalledFrom )
                      buf += "Degeneration in R matrix (fault in SLE solver).\n"
                             "Mass balance cannot be improved, not possible to proceed.";
          setErrorMessage( 5, "E05IPM: Mass Balance Refinement: " , buf.c_str() );
+         gems_logger->warn(buf);
        }
 
       // SOLVED: solution of linear matrix has been obtained
@@ -1287,103 +1288,105 @@ void TMultiBase::WeightMultipliers( bool square )
 ///         1  - no solution, degenerated or inconsistent system
 long int TMultiBase::MakeAndSolveSystemOfLinearEquations( long int N, bool initAppr )
 {
-  long int ii, i, jj, kk, k, Na = pm.N;
-  Alloc_A_B( N );
+    long int ii, i, jj, kk, k, Na = pm.N;
+    Alloc_A_B( N );
 
-  // Making the  matrix of IPM linear equations
-  for( kk = 0; kk < N; kk++)
-   for( ii=0; ii < N; ii++ )
-      (*(AA+(ii)+(kk)*N)) = 0.;
+    // Making the  matrix of IPM linear equations
+    for( kk = 0; kk < N; kk++)
+        for( ii=0; ii < N; ii++ )
+            (*(AA+(ii)+(kk)*N)) = 0.;
 
-  for( jj=0; jj < pm.L; jj++ )
-  {
-    if( pm.Y[jj] > min( pm.lowPosNum, pm.DcMinM ) )
+    for( jj=0; jj < pm.L; jj++ )
     {
-      for( k = arrL[jj]; k < arrL[jj+1]; k++)
-        for( i = arrL[jj]; i < arrL[jj+1]; i++ )
-        { ii = arrAN[i];
-          kk = arrAN[k];
-          if( ii >= N || kk >= N )
-           continue;
-          (*(AA+(ii)+(kk)*N)) += a(jj,ii) * a(jj,kk) * pm.W[jj];
+        if( pm.Y[jj] > min( pm.lowPosNum, pm.DcMinM ) )
+        {
+            for( k = arrL[jj]; k < arrL[jj+1]; k++)
+                for( i = arrL[jj]; i < arrL[jj+1]; i++ )
+                { ii = arrAN[i];
+                    kk = arrAN[k];
+                    if( ii >= N || kk >= N )
+                        continue;
+                    (*(AA+(ii)+(kk)*N)) += a(jj,ii) * a(jj,kk) * pm.W[jj];
+                }
         }
     }
-  }
 
-   if( initAppr )
-     for( ii = 0; ii < N; ii++ )
-         BB[ii] = pm.C[ii];
-   else {
-     for( ii = 0; ii < N; ii++ )
-         BB[ii] = 0.;
-     for( jj=0; jj < pm.L; jj++ )
-        if( pm.Y[jj] > min( pm.lowPosNum, pm.DcMinM ) )
-           for( i = arrL[jj]; i < arrL[jj+1]; i++ )
-           {  ii = arrAN[i];
-              if( ii >= N )
-                continue;
-              BB[ii] += pm.F[jj] * a(jj,ii) * pm.W[jj];
-           }
+    if( initAppr )
+        for( ii = 0; ii < N; ii++ )
+            BB[ii] = pm.C[ii];
+    else {
+        for( ii = 0; ii < N; ii++ )
+            BB[ii] = 0.;
+        for( jj=0; jj < pm.L; jj++ )
+            if( pm.Y[jj] > min( pm.lowPosNum, pm.DcMinM ) )
+                for( i = arrL[jj]; i < arrL[jj+1]; i++ )
+                {  ii = arrAN[i];
+                    if( ii >= N )
+                        continue;
+                    BB[ii] += pm.F[jj] * a(jj,ii) * pm.W[jj];
+                }
     }
 
 #ifndef PGf90
-  Array2D<double> A( N, N, AA );
-  Array1D<double> B( N, BB );
+    Array2D<double> A( N, N, AA );
+    Array1D<double> B( N, BB );
 #else
-  Array2D<double> A( N, N);
-  Array1D<double> B( N );
+    Array2D<double> A( N, N);
+    Array1D<double> B( N );
 
-  for( kk = 0; kk < N; kk++)
-   for( ii = 0; ii < N; ii++ )
-      A[kk][ii] = (*(AA+(ii)+(kk)*N));
-   for( ii = 0; ii < N; ii++ )
-     B[ii] = BB[ii];
+    for( kk = 0; kk < N; kk++)
+        for( ii = 0; ii < N; ii++ )
+            A[kk][ii] = (*(AA+(ii)+(kk)*N));
+    for( ii = 0; ii < N; ii++ )
+        B[ii] = BB[ii];
 #endif
 
-  // std::cout << "MakeAndSolveSystemOfLinearEquations" << std::endl;
-  // for(int ii=0; ii<N; ++ii) {
-  //      for(jj=0; jj<N; ++jj) {
-  //        std::cout << A[ii][jj] << " ";
-  //      }
-  //      std::cout << " = " << BB[ii]  << std::endl;
-  // }
+    if(gems_logger->should_log(spdlog::level::debug)) {
+        gems_logger->debug("MakeAndSolveSystemOfLinearEquations\n {} \n {} \n", A.to_string(), B.to_string());
+    }
 
-// From here on, the NIST TNT Jama/C++ linear algebra package is used
-//    (credit: http://math.nist.gov/tnt/download.html)
-// this routine constructs the Cholesky decomposition, A = L x LT .
-  JAMA::Cholesky<double>  chol(A);
+    // From here on, the NIST TNT Jama/C++ linear algebra package is used
+    //    (credit: http://math.nist.gov/tnt/download.html)
+    // this routine constructs the Cholesky decomposition, A = L x LT .
+    JAMA::Cholesky<double>  chol(A);
+    if(gems_logger->should_log(spdlog::level::debug)) {
+        gems_logger->debug("{}", chol.to_string());
+    }
 
-  if( chol.is_spd() )  // is positive definite A.
-  {
-    B = chol.solve( B );
-  }
-  else
-  {
-// no solution by Cholesky decomposition; Trying the LU Decompositon
-// The LU decompostion with pivoting always exists, even if the matrix is
-// singular, so the constructor will never fail.
+    if( chol.is_spd() )  // is positive definite A.
+    {
+        B = chol.solve( B );
+    }
+    else
+    {
+        // no solution by Cholesky decomposition; Trying the LU Decompositon
+        // The LU decompostion with pivoting always exists, even if the matrix is
+        // singular, so the constructor will never fail.
 
-   JAMA::LU<double>  lu(A);
+        JAMA::LU<double>  lu(A);
+        if(gems_logger->should_log(spdlog::level::debug)) {
+            gems_logger->debug("{}", lu.to_string());
+        }
 
-// The primary use of the LU decomposition is in the solution
-// of square systems of simultaneous linear equations.
-// This will fail if isNonsingular() returns false.
-   if( !lu.isNonsingular() )
-     return 1; // Singular matrix - too bad! No solution ...
+        // The primary use of the LU decomposition is in the solution
+        // of square systems of simultaneous linear equations.
+        // This will fail if isNonsingular() returns false.
+        if( !lu.isNonsingular() )
+            return 1; // Singular matrix - too bad! No solution ...
 
-  B = lu.solve( B );
-  }
+        B = lu.solve( B );
+    }
 
-if( initAppr )
-{
-   for( ii = 0; ii < N; ii++ )
-     pm.Uefd[ii] = B[(int)ii];
-}
-else {
-  for( ii = 0; ii < N; ii++ )
-     pm.U[ii] = B[(int)ii];
-}
-  return 0;
+    if( initAppr )
+    {
+        for( ii = 0; ii < N; ii++ )
+            pm.Uefd[ii] = B[(int)ii];
+    }
+    else {
+        for( ii = 0; ii < N; ii++ )
+            pm.U[ii] = B[(int)ii];
+    }
+    return 0;
 }
 
 #undef a
