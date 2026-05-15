@@ -1,9 +1,11 @@
 #include <fstream>
 #include <sstream>
+#include <filesystem>
+namespace fs = std::filesystem;
+
 #include "gems3k_impex.h"
 #include "v_detail.h"
 #include "v_service.h"
-
 
 GEMS3KGenerator::IOModes GEMS3KGenerator::default_type_f =
         GEMS3KGenerator::f_json;
@@ -31,6 +33,15 @@ GEMS3KGenerator::GEMS3KGenerator(const std::string &filepath, long anIV, IOModes
     ErrorIf( io_mode>=f_thermofun, ipmfiles_lst_name, " ThermoFun as an option is hidden");
 #endif
     set_internal_data();
+}
+
+bool GEMS3KGenerator::create_dir() const
+{
+    fs::path ps(get_dir());
+    if(fs::exists(ps)) {
+        return true;
+    }
+    return fs::create_directories(ps);
 }
 
 std::string GEMS3KGenerator::gen_dbr_file_name(int time_point, size_t index) const
