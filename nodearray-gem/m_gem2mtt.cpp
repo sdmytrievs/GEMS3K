@@ -189,11 +189,11 @@ DIFFERENT:
 //   return code   true   Ok
 //                 false  Error in GEMipm calculation part
 //
-bool TGEM2MT::CalcIPM( char mode, long int start_node, long int end_node, FILE* updiffile )
+bool TGEM2MT::CalcIPM( char mode, long int start_node, long int end_node, spdlog::logger* updiffile )
 {
     bool iRet = true;
 
-    FILE* diffile = nullptr;
+    spdlog::logger* diffile = nullptr;
     if( mtp->PsMO != S_OFF )
       diffile = updiffile;
 
@@ -602,6 +602,9 @@ double TMyTransport::OneTimeStepRun_CN( long int *ICndx, long int nICndx )
 
 */
 
+
+#include "spdlog/sinks/basic_file_sink.h"
+
 // Main call for the mass transport iterations in 1D case
 //
 // mode is NEED_GEM_AIA or NEED_GEM_PIA (see DATABR.H) mode of GEM initial approximation
@@ -616,9 +619,10 @@ bool TGEM2MT::Trans1D( char mode )
     // long int NodesSetToAIA;
     // std::string Vmessage;
 
-    FILE* logfile = nullptr;
-    FILE* ph_file = nullptr;
-    FILE* diffile = nullptr;
+    std::shared_ptr<spdlog::logger> logfile;
+    std::shared_ptr<spdlog::logger> ph_file;
+    //FILE* diffile = nullptr;
+    std::shared_ptr<spdlog::logger> diff_log_file;
 
 
     if( mtp->PvDDc == S_ON && mtp->PvDIc == S_OFF )  // Set of DC transport using record switches
@@ -629,17 +633,16 @@ bool TGEM2MT::Trans1D( char mode )
     if( mtp->PsMO != S_OFF )
     {
         std::string fname;
-   
+
+        diff_log_file = spdlog::basic_logger_mt("ic_diff_log", "ICdif-log2.dat", true);
+        diff_log_file->set_pattern("%v");
+
         // Preparations: opening output files for monitoring 1D profiles
-        logfile = fopen( ( fname + "ICaq-log.dat").c_str(), "w+" );    // Total dissolved element molarities
-        if( !logfile)
-            return iRet;
-        ph_file = fopen( ( fname + "Ph-log.dat" ).c_str(), "w+" );   // Mole amounts of phases
-        if( !ph_file)
-            return iRet;
-        diffile = fopen( ( fname + "ICdif-log.dat").c_str(), "w+" );   //  Element amount diffs for t and t-1
-        if( !diffile)
-            return iRet;
+        logfile = spdlog::basic_logger_mt("ic_aq_log", "ICaq-log2.dat", true);
+        logfile->set_pattern("%v");
+
+        ph_file = spdlog::basic_logger_mt("ph_log", "Ph-log2.dat", true);
+        ph_file->set_pattern("%v");
     }
 
     // time scales testing
@@ -676,9 +679,9 @@ bool TGEM2MT::Trans1D( char mode )
         // Calculation of chemical equilibria in all nodes at the beginning
         // with the LPP AIA
         if( mtp->PsSIA != S_ON )
-            CalcIPM( NEED_GEM_AIA, nStart, nEnd, diffile );
+            CalcIPM( NEED_GEM_AIA, nStart, nEnd, diff_log_file.get() );
         else
-            CalcIPM( NEED_GEM_SIA,nStart, nEnd, diffile );
+            CalcIPM( NEED_GEM_SIA,nStart, nEnd, diff_log_file.get() );
         ///       CalcIPM( NEED_GEM_AIA, nStart, nEnd, diffile );
     }
     mtp->iStat = AS_READY;
@@ -687,7 +690,7 @@ bool TGEM2MT::Trans1D( char mode )
         CalcMGPdata();
 
     if( mtp->PsMO != S_OFF )
-        otime += PrintPoint( 2, diffile, logfile, ph_file );
+        otime += PrintPoint(2, diff_log_file.get(), logfile.get(), ph_file.get());
 
     if( mtp->PsVTK != S_OFF )
         otime += PrintPoint( 0 );
@@ -721,10 +724,10 @@ bool TGEM2MT::Trans1D( char mode )
 
         //   Here we call a loop on GEM calculations over nodes
         //   parallelization should affect this loop only
-        CalcIPM( mode, nStart, nEnd, diffile );
+        CalcIPM( mode, nStart, nEnd, diff_log_file.get() );
 
         if( mtp->PsMO != S_OFF )
-            otime += PrintPoint( 3, diffile, logfile, ph_file );
+            otime += PrintPoint( 3, diff_log_file.get(), logfile.get(), ph_file.get());
 
         // Here one has to compare old and new equilibrium phase assemblage
         // and pH/pe in all nodes and decide if the time step was Ok or it
@@ -743,7 +746,7 @@ bool TGEM2MT::Trans1D( char mode )
             CalcMGPdata(); // Recalculation of MGP compositions and masses
 
         if( mtp->PsMO != S_OFF )
-            otime += PrintPoint( 4, diffile, logfile, ph_file );
+            otime += PrintPoint( 4, diff_log_file.get(), logfile.get(), ph_file.get());
 
         if( mtp->PsVTK != S_OFF )
             otime += PrintPoint( 0 );
@@ -763,12 +766,8 @@ bool TGEM2MT::Trans1D( char mode )
 
     if( mtp->PsMO != S_OFF )
     {
-        fprintf( diffile,
-                 "\nTotal time of calculation %lg s;  Time of output %lg s;  Whole run time %lg s;  Pure GEM run time %lg s\n",
-                 (dtime-otime),  otime, dtime, mtp->TimeGEM );
-        fclose( logfile );
-        fclose( ph_file );
-        fclose( diffile );
+        diff_log_file->info("Total time of calculation {} s;  Time of output {} s;  Whole run time {} s;  Pure GEM run time {} s",
+                            (dtime-otime), otime, dtime, mtp->TimeGEM);
     }
 
     return iRet;
@@ -777,7 +776,7 @@ bool TGEM2MT::Trans1D( char mode )
 
 // plotting the record -------------------------------------------------
 //Added one point to graph
-double TGEM2MT::PrintPoint( long int nPoint, FILE* diffile, FILE* logfile, FILE* ph_file )
+double TGEM2MT::PrintPoint( long int nPoint, spdlog::logger* diffile, spdlog::logger* logfile, spdlog::logger* ph_file)
 {
     long int evrt =10;
 
@@ -822,21 +821,8 @@ double TGEM2MT::PrintPoint( long int nPoint, FILE* diffile, FILE* logfile, FILE*
    }
 
    // write to VTK
-   if( nPoint == 0  && mtp->PsVTK != S_OFF )
-   {
-       char buf[200];
-
-       sprintf( buf, "%05ld", mtp->ct);
-       std::string name = buf;
-
-       strip(name);
-       name += ".vtk";
-
-       name = pathVTK + nameVTK + "/" + prefixVTK + name;
-
-       std::fstream out_br(name, std::ios::out );
-       ErrorIf( !out_br.good() , name, "VTK text make error");
-       na->databr_to_vtk(out_br, nameVTK.c_str(), mtp->cTau, mtp->ct, mtp->nVTKfld, mtp->xVTKfld );
+   if(nPoint == 0) {
+       log_vtk();
    }
 
 #ifdef useOMP
@@ -849,6 +835,22 @@ double TGEM2MT::PrintPoint( long int nPoint, FILE* diffile, FILE* logfile, FILE*
 #endif
 
 }
+
+
+// write to VTK
+void TGEM2MT::log_vtk()
+{
+    if(mtp->PsVTK != S_OFF) {
+        std::string name = std::to_string(mtp->ct)+".vtk";
+        name = pathVTK + nameVTK + "/" + prefixVTK + name;
+
+        std::fstream out_br(name, std::ios::out);
+        ErrorIf(!out_br.good(), name, "VTK text make error");
+        na->databr_to_vtk(out_br, nameVTK, mtp->cTau, mtp->ct, mtp->nVTKfld, mtp->xVTKfld);
+    }
+}
+
+
 
 // --------------------- end of m_gem2mtt.cpp ---------------------------
 
