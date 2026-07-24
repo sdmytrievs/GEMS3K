@@ -675,6 +675,9 @@ bool TGEM2MT::BoxEqStatesUpdate(  long int Ni, long int /*pr*/, double tcur, dou
       PrintPoint( 1 );
  }
 
+   // time step accepted - Copying nodes from C1 to C0 row
+   //   pVisor->Update();
+   //   CalcGraph();
    
   // copy node array for T0 into node array for T1
   mtp->oTau = mtp->cTau;
@@ -826,6 +829,7 @@ bool TGEM2MT::CalcSeqReacModel( char mode )
 
     BoxFluxTransportStart();
 
+// RecordPlot(GUI)
 
 // na->CopyWorkNodeFromArray( 0, mtp->nC,  na->pNodT1() );
 // na->GEM_write_dbr( "node0000.dat",  0, false );
@@ -938,8 +942,13 @@ bool TGEM2MT::CalcSeqReacModel( char mode )
          ComposMGPinBox( p );
        } // p
 
+    // time step accepted - Copying nodes from C1 to C0 row
+    //pVisor->Update();
+    //CalcGraph();
+
        // copy node array T1 into node array T0
        copyNodeArrays();
+
 
         mtp->ct += 1;
         mtp->oTau = mtp->cTau;
@@ -972,6 +981,8 @@ bool TGEM2MT::CalcBoxFluxModel( char /*mode*/ )
   try
   {	 
     BoxFluxTransportStart();
+
+// RecordPlot( nullptr );
 
   // Initial calculation of chemical equilibria in all nodes with AIA initial approximation
   BoxEqStatesUpdate( -1,  0, mtp->cTau/mtp->tf, mtp->dTau/mtp->tf );

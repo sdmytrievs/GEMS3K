@@ -734,6 +734,9 @@ bool TGEM2MT::Trans1D( char mode )
         // should be decreased. If so then the nodes from C0 should be
         // copied to C1 (to be implemented)
 
+        // time step accepted - Copying nodes from C1 to C0 row
+        //pVisor->Update();
+        //CalcGraph();
 
         // copy node array T1 into node array T0
         copyNodeArrays();
