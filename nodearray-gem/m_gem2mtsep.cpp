@@ -229,7 +229,7 @@ int TGEM2MT::MassTransInit( const char *lst_f_name, const char *dbr_lst_f_name )
     if( na->GEM_init( lst_f_name, dbr_lst_f_name, nodeType.data(), mtp->iStat == AS_RUN ) )
         return 1;  // error reading files
 
-    CalcIPM( NEED_GEM_AIA, 0, mtp->nC, 0 ); //recalc all nodes ?
+    CalcIPM( NEED_GEM_AIA, 0, mtp->nC); //recalc all nodes ?
 
     for( ii=0; ii< mtp->nTai; ii++)
         mtp->Tval[ii] =  na->pCSD()->TKval[ii]-C_to_K;
@@ -281,7 +281,7 @@ int TGEM2MT::MassTransStringInit(const std::string& dch_json, const std::string&
     if( na->GEM_init( dch_json, ipm_json, dbr_json, nodeType.data() ) )
         return 1;  // error reading files
 
-    CalcIPM( NEED_GEM_AIA, 0, mtp->nC, 0 ); //recalc all nodes ?
+    CalcIPM( NEED_GEM_AIA, 0, mtp->nC); //recalc all nodes ?
 
     for( ii=0; ii< mtp->nTai; ii++)
         mtp->Tval[ii] =  na->pCSD()->TKval[ii]-C_to_K;
