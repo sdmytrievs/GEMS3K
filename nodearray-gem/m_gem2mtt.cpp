@@ -658,15 +658,16 @@ bool TGEM2MT::Trans1D(char mode)
 
     mtp->iStat = AS_READY;
 
-    if( mtp->PsMode == RMT_MODE_F )
+    if(mtp->PsMode == RMT_MODE_F) {
         CalcMGPdata();
+    }
 
 #ifdef useOMP
     ta0 = omp_get_wtime();
 #else
     t_ap0 = clock();
 #endif
-    iret = accept_point(mtp->ct, "Trans1D before loop the mass transport iteratios");
+    iret = accept_point(mtp->ct, "Simulating Reactive Transport: ", mtp->ct, mtp->ntM);
 #ifdef useOMP
     ta1 = omp_get_wtime();
     otime +=(ta1-ta0);
@@ -711,9 +712,9 @@ bool TGEM2MT::Trans1D(char mode)
         ta0 = omp_get_wtime();
 #else
         t_ap0 = clock();
-#endif \
+#endif
         // Show/out results after GEM calculations over nodes
-        iret = accept_point(mtp->ct, "Trans1D time step accepted");
+        iret = accept_point(mtp->ct, "Simulating Reactive Transport: ", mtp->ct, mtp->ntM);
 #ifdef useOMP
         ta1 = omp_get_wtime();
         otime +=(ta1-ta0);
@@ -729,6 +730,10 @@ bool TGEM2MT::Trans1D(char mode)
             pa_mt->CopyfromT1toT0();
         }
 
+        // Calculating the control script at the end of a new time step
+        if(mtp->ct > 0)
+            CalcControlScript();
+        
         if( mtp->PsMode == RMT_MODE_F ) { // in F mode
             CalcMGPdata(); // Recalculation of MGP compositions and masses
         }
@@ -752,6 +757,8 @@ bool TGEM2MT::Trans1D(char mode)
         diff_log_file->info("Total time of calculation {} s;  Time of output {} s;  Whole run time {} s;  Pure GEM run time {} s",
                             (dtime-otime), otime, dtime, mtp->TimeGEM);
     }
+
+    //pVisor->CloseMessage();
     return iret;
 }
 
@@ -785,9 +792,14 @@ void TGEM2MT::point_to_loggers()
 
 }
 
-bool TGEM2MT::accept_point(long int mtp_cp, std::string message)
+bool TGEM2MT::accept_point(long int mtp_cp, std::string message, int prog, int total)
 {
-    gems_logger->info("Model {} TGEM2MT accept point {} - {} ", mtp->PsMode, mtp_cp, message);
+    bool iret = false;
+    auto Vmessage = message;
+    Vmessage += " step "+std::to_string(mtp->ct)+"; time "+std::to_string(mtp->cTau)+"; dtime "+std::to_string(mtp->dTau);
+    Vmessage += ". Please, wait (may take time)...";
+
+    gems_logger->info(Vmessage);
 
     if(mtp_cp >= 0) {
         // Here one has to compare old and new equilibrium phase assemblage
@@ -801,10 +813,17 @@ bool TGEM2MT::accept_point(long int mtp_cp, std::string message)
         }
     }
 
-    // time step accepted
+    // time step accepted or first
     //pVisor->Update();
     //CalcGraph();
-    return false;
+    //if(mtp->PsSmode != S_OFF)  {
+    //    STEP_POINT2();
+    //}
+    //else {
+    //    iret = pVisor->Message(GetName(), Vmessage.c_str(), prog, total);
+    //}
+
+    return iret;
 }
 
 void TGEM2MT::log_vtk()
@@ -821,7 +840,176 @@ void TGEM2MT::log_vtk()
     }
 }
 
+// Calculation of control script at time mtp->cTau (step mtp->ct) of RT simulation
+void TGEM2MT::CalcControlScript()
+{
+    gems_logger->info("Control Script runs @ ct= {}   cTau= {}", mtp->ct, mtp->cTau);
 
+    if(mtp->PvMSc == S_OFF) {  // This switch is S_ON when mtp->PvMSt is S_ON, but this may be optimized
+        return;
+    }
+
+    // scroll through the nodes (boxes)
+    //for(long int ii=0; ii< mtp->nC; ++ii) {
+    //    mtp->jt = std::min( ii, (mtp->nC-1));
+    //    mtp->qc = ii;
+    //    mtp->qf = 0;  // index of flux should be set explicitly, explicit index of mgp taken from the flux
+    //}
+
+}
+
+// Calculation of control script at RT problem initialization stage
+void TGEM2MT::CalcStartScript()
+{
+    if(mtp->PvMSt == S_OFF) {
+        return;
+    }
+
+    // generate Ti, Pi, Vi, DiCp, HydP, ... and fluxes arrays
+    for(long int ii=0; ii< std::max( mtp->nC, mtp->nFD ); ++ii) {
+        mtp->jt = std::min(ii, mtp->nC-1);
+        mtp->qc = std::min(ii, mtp->nC-1);  // index of node
+        mtp->qf = std::min(ii, mtp->nFD-1);  // index of flux
+
+        // Initialization part at zero (time) step
+        if( mtp->nC>0 && mtp->qc<mtp->nC) {
+            //  Initial setup of cells (nodes, boxes)
+
+            //  Assign different fluid and rock composition indices to nodes (assuming fluid=0 and rock=1)
+            if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
+                // for A or C mode, nodes 0 and 1 contain the initial fluid
+                mtp->DiCp[mtp->qc][0] = (mtp->qc==0 || mtp->qc==1 ? 0 : (mtp->nIV>1 ?  1 : 0 ));
+            }
+            else {
+                // for other modes, one Cauchy source is sufficient
+                // Node 0 contains initial fluid, for more nodes change as: ( qc=0 | qc=XX )
+                mtp->DiCp[mtp->qc][0] = (mtp->qc==0 ? 0 : (mtp->nIV>1 ?  1 : 0));
+            }
+
+            if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
+                // for A and C mode, we need two first nodes as Cauchy sources
+                // for A or C mode, nodes 0 and 1 are set to a constant-flux source
+                mtp->DiCp[mtp->qc][1] = (mtp->qc==0 || mtp->qc==1 ? 3 : 0);
+            }
+            else if(mtp->PsMode == RMT_MODE_B || mtp->PsMode == RMT_MODE_F) {
+                //  for B or F mode, node 0 is set to a constant-flux source
+                mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3: 0 );
+                //mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? (mtp->nSFD==1? 0: 3) : 0);
+            }
+            else {
+                // One Cauchy source is sufficient
+                // Node 0 is set as source, for more sources change as: ( qc=0 | qc=XX )
+                mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3 : 0);
+            }
+
+            if(mtp->PsMode == RMT_MODE_B)  {// Random-walk sink fix
+                //  Other nodes normal, the last two set as constant source and sink
+                mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-2 ? mtp->DiCp[mtp->qc][1]: 3);
+                mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
+            }
+            else {
+                // Other nodes normal, the last one is set as a constant-flux sink
+                mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
+            }
+
+            // Set initial node pressures (change 0 in qc*0 to set a gradient)
+            mtp->StaP[mtp->qc][0] = mtp->PTVm[mtp->DiCp[mtp->qc][0]][0] + mtp->qc*0;
+            if(mtp->PsMode == RMT_MODE_S || mtp->PsMode == RMT_MODE_F) {
+                mtp->Pval[mtp->qc] = mtp->StaP[mtp->qc][0];  // PVal nPai
+            }
+
+            // Set initial node temperatures (change 0 in qc*0 to set a gradient)
+            mtp->StaP[mtp->qc][1] = mtp->PTVm[mtp->DiCp[mtp->qc][0]][1] + mtp->qc*0;
+            if(mtp->PsMode == RMT_MODE_S || mtp->PsMode == RMT_MODE_F) {
+                mtp->Tval[mtp->qc] = mtp->StaP[mtp->qc][1]; //? Tval nTai
+            }
+
+            // Volume constraint for GEM (usually 0) - change to AMR on water vapor?
+            mtp->StaP[mtp->qc][2] = mtp->PTVm[mtp->DiCp[mtp->qc][0]][2];
+
+            // Initial (reactive) mass of the node
+            mtp->StaP[mtp->qc][3] = mtp->PTVm[mtp->DiCp[mtp->qc][0]][3];
+
+            if(mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
+                //  Initial total volume of the node, m3 (for porosity)
+                mtp->HydP[mtp->qc][0] = mtp->vol_in;
+                //  Initial advection velocity, m/s
+                mtp->HydP[mtp->qc][1] = mtp->fVel;
+                //  Initial effective porosity
+                mtp->HydP[mtp->qc][2] = mtp->eps_in;
+                //  Initial effective permeability
+                mtp->HydP[mtp->qc][3] = mtp->Km_in;
+                //  Initial specific longitudinal dispersivity
+                mtp->HydP[mtp->qc][4] = mtp->al_in;
+                //  Initial general diffusivity
+                mtp->HydP[mtp->qc][5] = mtp->Dif_in;
+                //  Initial tortuosity factor
+                mtp->HydP[mtp->qc][6] = mtp->nto_in;
+            }
+        } // end of initialization of cells (nodes, boxes)
+
+        if( mtp->PvFDL == S_OFF /*(nFD > 0) & (qf < nFD)*/)  {
+            //   initialisation of tables for properties of fluxes
+            if(mtp->qf == mtp->qc) {
+                // Setting the chain of unidirectional fluxes connecting boxes
+                if(mtp->PsMode == RMT_MODE_S) {
+                    // flux from node/box
+                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0? 0: mtp->FDLi[mtp->qf-1][1] );
+                    // flux to node/box
+                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1? mtp->qf+1: -1);
+                    // flux order zero (constant mass per step)
+                    mtp->FDLf[mtp->qf][0] = 0;
+                    // flux rate 1 (the whole fluid mass)
+                    mtp->FDLf[mtp->qf][1] = 1;
+                }
+                if(mtp->PsMode == RMT_MODE_F) {
+                    // flux from node/box
+                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0 ? 0: mtp->FDLi[mtp->qf-1][1] );
+                    // flux to node/box
+                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1 ? mtp->qf+1 : -1);
+                    // flux order 1 (proportional to source MPG mass)
+                    mtp->FDLf[mtp->qf][0] = (mtp->qf==0 ? 0 : 1);
+                    //  flux rate constant
+                    mtp->FDLf[mtp->qf][1] = (mtp->qf==0 ? 1 : 0.1);
+                }
+                if(mtp->PsMode == RMT_MODE_B) {
+                    // flux from node/box
+                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0 ? 0: mtp->FDLi[mtp->qf-1][1]);
+                    // flux to node/box
+                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1 ? mtp->qf+1 : -1);
+                    // flux order 1 (proportional to source MPG mass)
+                    mtp->FDLf[mtp->qf][0] = (mtp->qf==0 ? 0 : 1);
+                    // flux rate constant
+                    mtp->FDLf[mtp->qf][1] = (mtp->qf==0? 1 : 0.1);
+                }
+            } // end of setting a chain of 1-dir fluxes connecting boxes
+
+            if(mtp->qf > mtp->nC-1 ) {
+                // additional fluxes (elemental remo/prod or arbitrary normal fluxes)
+                //  enter index 0 as MPG name in FDLmp[qf] column
+                //   group for first elemental removal or production row in BSF table
+                if(mtp->qf == mtp->nC) {
+                    mtp->FDLi[mtp->qf][0] = 30;
+                    mtp->FDLi[mtp->qf][1] = (-1);
+                    // flux order (0, 1 or 3), change as desired
+                    mtp->FDLf[mtp->qf][0] = 0;
+                    //  flux rate (constant): >0: removal; <0: production. Change as desired
+                    mtp->FDLf[mtp->qf][1] = 0.001;
+                } //  end of group - add below groups for other remo/prod rows in BSF table
+
+                //  for the second group, enter index 1 as MPG name in FDLmp[qf] column
+                //       if( qf = nC+1 ) {
+                //        .....
+                //     }
+                //  For arbitrary normal MPG fluxes between boxes, add groups like above
+                //  in setting the chain of fluxes
+                //    end of additional fluxes
+
+            } // end of initialization of fluxes
+        }
+        // end of initialization at ct=0
+    }
+}
 
 // --------------------- end of m_gem2mtt.cpp ---------------------------
 
