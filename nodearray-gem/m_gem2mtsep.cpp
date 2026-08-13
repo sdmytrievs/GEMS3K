@@ -11,33 +11,31 @@
 //
 //-------------------------------------------------------------------
 
-#include <filesystem>
-
 #include "m_gem2mt.h"
+#include "GEMS3K/nodearray.h"
 #include "GEMS3K/io_keyvalue.h"
 #include "GEMS3K/io_simdjson.h"
+#ifdef USE_NLOHMANNJSON
 #include "GEMS3K/io_nlohmann.h"
-#include "GEMS3K/nodearray.h"
-
-namespace fs = std::filesystem;
+#endif
 
 TGEM2MT* TGEM2MT::pm;
 
 TGEM2MT::TGEM2MT( size_t /*nrt*/ )
 {
-  mtp=&mt[0];
-  set_def( 0 );
-  ////mtp->PvMO =   S_ON;
-  ////mtp->iStat =  AS_READY;
-  na = 0;
-  pa_mt = 0;
+    mtp=&mt[0];
+    set_def(0);
+    ////mtp->PvMO =   S_ON;
+    ////mtp->iStat =  AS_READY;
+    na = 0;
+    pa_mt = 0;
 }
 
 TGEM2MT::~TGEM2MT()
 {
-  mem_kill(0);
-  if( pa_mt )
-    delete pa_mt;
+    mem_kill(0);
+    if( pa_mt )
+        delete pa_mt;
 }
 
 //=======================================================================================
@@ -45,102 +43,89 @@ TGEM2MT::~TGEM2MT()
 //Calculate record
 void TGEM2MT::RecCalc()
 {
-    try
-    {
-        bool iRet;
-
-        if( mtp->PsVTK != S_OFF )
-        {
-            fs::create_directory(pathVTK);
+    try {
+        if(mtp->PsVTK != S_OFF)  {
+            u_create_directory(pathVTK+nameVTK+"/");
         }
 
-        if( mtp->iStat != AS_RUN  )
-        {
+        if(mtp->iStat != AS_RUN) {  // ???? Could we stop and restart calculations?
             mtp->gStat = GS_GOING;
             mt_reset();
             mtp->gStat = GS_DONE;
         }
 
         // internal calc
-        iRet = internalCalc();
-        if(!iRet)
+        auto iret = internalCalc();
+        if(!iret) {
             mtp->iStat = AS_DONE;
+        }
         //else we have a stop point
-
     }
-    catch( TError& xcpt )
-    {
+    catch(TError& xcpt)  {
         mtp->gStat = GS_ERR;
         mtp->iStat = AS_INDEF;
-        Error(  xcpt.title.c_str(), xcpt.mess.c_str() );
+        throw xcpt;
     }
 }
 
 
 // read TGEM2MT structure from file
-int TGEM2MT::ReadTask( const char *gem2mt_in1, const char *vtk_dir )
+int TGEM2MT::ReadTask(const std::string& gem2mt_file, const std::string& vtk_dir)
 {
+    try {
+        std::string gem2mt_in = gem2mt_file;
+        std::fstream ff(gem2mt_in, std::ios::in );
+        ErrorIf( !ff.good() , gem2mt_in, "Fileopen error");
 
- // read GEM2MT structure from file
-  try
-  {
-   std::string gem2mt_in = gem2mt_in1;
-   std::fstream ff(gem2mt_in, std::ios::in );
-   ErrorIf( !ff.good() , gem2mt_in, "Fileopen error");
-
-   if( gem2mt_in.rfind(".json") != std::string::npos )
+        if(gem2mt_in.rfind(".json") != std::string::npos) {
 #ifdef USE_NLOHMANNJSON
-    {
-        io_formats::NlohmannJsonRead in_format( ff, "", "gem2mt" );
-        from_text_file( in_format );
-    }
+            io_formats::NlohmannJsonRead in_format(ff, "", "gem2mt");
+            from_text_file( in_format );
+        }
 #else
-   {
-       io_formats::SimdJsonRead in_format( ff, "", "gem2mt" );
-       from_text_file( in_format );
-   }
+            io_formats::SimdJsonRead in_format(ff, "", "gem2mt");
+            from_text_file( in_format );
+        }
 #endif
-   else
-   {
-       io_formats::KeyValueRead in_format( ff );
-       from_text_file( in_format );
-   }
+        else {
+            io_formats::KeyValueRead in_format( ff );
+            from_text_file( in_format );
+        }
 
-   pathVTK = vtk_dir;
-   if( !pathVTK.empty() )
-   {
-       pathVTK += "/";
-   }
-   return 0;
-  }
-  catch(TError& err)
-  {
-      std::fstream f_log("gem2mtlog.txt", std::ios::out|std::ios::app );
-      f_log << err.title.c_str() << "  : " << err.mess.c_str() << std::endl;
-  }
-  return 1;
+        pathVTK = vtk_dir;
+        if(!pathVTK.empty()) {
+            pathVTK += "/";
+        }
+        return 0;
+    }
+    catch(TError& err) {
+        // ???? add logger
+        std::fstream f_log("gem2mtlog.txt", std::ios::out|std::ios::app );
+        f_log << err.title.c_str() << "  : " << err.mess.c_str() << std::endl;
+    }
+    return 1;
 }
 
-int TGEM2MT::ReadTaskString( const std::string json_string )
+int TGEM2MT::ReadTaskString(const std::string json_string)
 {
-    if( json_string.empty() )
+    if(json_string.empty()) {
         return 1;
+    }
 
-    try
-    {
+    try  {
         std::stringstream ss;
         ss.str(json_string);
 #ifdef USE_NLOHMANNJSON
-        io_formats::NlohmannJsonRead in_format( ss, "", "gem2mt" );
+        io_formats::NlohmannJsonRead in_format(ss, "", "gem2mt");
         from_text_file( in_format );
 #else
-        io_formats::SimdJsonRead in_format( ss, "", "gem2mt" );
-        from_text_file( in_format );
+        io_formats::SimdJsonRead in_format(ss, "", "gem2mt");
+        from_text_file(in_format);
 #endif
         return 0;
     }
-    catch(TError& err)
-    {
+    catch(TError& err) {
+        // ???? add logger
         std::fstream f_log("gem2mtlog.txt", std::ios::out|std::ios::app );
         f_log << err.title.c_str() << "  : " << err.mess.c_str() << std::endl;
     }
@@ -148,108 +133,148 @@ int TGEM2MT::ReadTaskString( const std::string json_string )
 }
 
 // Write TGEM2MT structure to file
-int TGEM2MT::WriteTask( const char *gem2mt_out1 )
+int TGEM2MT::WriteTask(const std::string& gem2mt_file)
 {
- // write GEM2MT structure to file
-  try
-  {
-   std::string gem2mt_out = gem2mt_out1;
-   std::fstream ff(gem2mt_out, std::ios::out );
-   ErrorIf( !ff.good() , gem2mt_out, "Fileopen error");
+    try  {
+        std::string gem2mt_out = gem2mt_file;
+        std::fstream ff(gem2mt_out, std::ios::out);
+        ErrorIf(!ff.good(), gem2mt_out, "Fileopen error");
 
-   if( gem2mt_out.rfind(".json") != std::string::npos )
+        if(gem2mt_out.rfind(".json") != std::string::npos) {
 #ifdef USE_NLOHMANNJSON
-    {
-        io_formats::NlohmannJsonWrite out_format( ff, "");
-        to_text_file( out_format, true, false );
-    }
+            io_formats::NlohmannJsonWrite out_format( ff, "");
+            to_text_file(out_format, true, false );
+        }
 #else
-   {
-       io_formats::SimdJsonWrite out_format( ff, "", true );
-       to_text_file( out_format, true, false );
-   }
+            io_formats::SimdJsonWrite out_format(ff, "", true);
+            to_text_file(out_format, true, false);
+        }
 #endif
-   else
-   {
-       io_formats::KeyValueWrite out_format( ff );
-       to_text_file( out_format, true, false );
-   }
+        else  {
+            io_formats::KeyValueWrite out_format(ff);
+            to_text_file(out_format, true, false);
+        }
+        return 0;
+    }
+    catch(TError& err) {
+        // ???? add logger
+        std::fstream f_log("gem2mtlog.txt", std::ios::out|std::ios::app );
+        f_log << err.title.c_str() << "  : " << err.mess.c_str() <<std:: endl;
+    }
+    return 1;
+}
 
-   return 0;
-  }
-  catch(TError& err)
-  {
-      std::fstream f_log("gem2mtlog.txt", std::ios::out|std::ios::app );
-      f_log << err.title.c_str() << "  : " << err.mess.c_str() <<std:: endl;
-  }
-  return 1;
+void TGEM2MT::default_VTK(const std::string& work_path)
+{
+    std::string folder, fname, ext;
+    if(!work_path.empty()) {
+        u_splitpath(work_path, folder, fname, ext);
+    }
+    auto pos = fname.rfind("-");
+    if(pos != std::string::npos) {
+        fname = fname.substr(0, pos);
+    }
+    if(pathVTK.empty()) {
+        pathVTK = folder+"VTK/";
+    }
+    if(fname.empty()) {
+        fname = "vtk";
+    }
+    if(nameVTK.empty()) {
+        nameVTK = fname;
+    }
+    prefixVTK = nameVTK;
 }
 
 
-// Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
-// Set up NodeArray and ParticleArray classes
-int TGEM2MT::MassTransInit( const char *lst_f_name, const char *dbr_lst_f_name )
+// Allocate math transport arrays
+void TGEM2MT::math_transport_init()
 {
-    int ii;
-    // define name of vtk file
-    std::string lst_in = lst_f_name;
-    size_t pos = lst_in.rfind("\\");
-    size_t pos2 = lst_in.rfind("/");
-    if( pos == std::string::npos )
-        pos = pos2;
-    else
-        if( pos2 < std::string::npos)
-            pos = std::max(pos, pos2 );
-    if( pos < std::string::npos )
-    {
-        if( pathVTK.empty() )
-        {
-            pathVTK = lst_in.substr(0, pos+1);
-            pathVTK += "VTK/";
-        }
-        lst_in = lst_in.substr(pos+1);
-    }
-    pos = lst_in.find(".");
-    lst_in = lst_in.substr(0, pos);
-    pos = lst_in.find("-");
-    lst_in = lst_in.substr(0, pos);
-    nameVTK = lst_in;
-    prefixVTK = lst_in;
-
     // The NodeArray must be allocated here
     na = TNodeArray::create(mtp->nC);
     TNodeArray::na = na.get();
+}
+
+// Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
+int TGEM2MT::gem3k_files_read(const std::string& ipm_lst_file, const std::string& dbr_lst_file)
+{
+    // define name of vtk file
+    default_VTK(ipm_lst_file);
+
     // Prepare the array for initial conditions allocation
     std::vector<long int> nodeType;
-    for( ii =0; ii<mtp->nC; ii++ )
+    for(int ii=0; ii<mtp->nC; ++ii) {
         nodeType.push_back(mtp->DiCp[ii][0]);
+    }
 
     // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
-    // if mtp->iStat == AS_RUN we resume calculation
-    if( na->GEM_init( lst_f_name, dbr_lst_f_name, nodeType.data(), mtp->iStat == AS_RUN ) )
+    // if mtp->iStat == AS_RUN we resume calculation ????
+    if(na->GEM_init(ipm_lst_file.c_str(), dbr_lst_file.c_str(), nodeType.data(), mtp->iStat == AS_RUN)) {
+        // ???? add logger
         return 1;  // error reading files
+    }
+    return 0;
+}
 
-    CalcIPM( NEED_GEM_AIA, 0, mtp->nC); //recalc all nodes ?
 
-    for( ii=0; ii< mtp->nTai; ii++)
-        mtp->Tval[ii] =  na->pCSD()->TKval[ii]-C_to_K;
-    for( ii=0; ii< mtp->nPai; ii++)
-        mtp->Pval[ii] =  na->pCSD()->Pval[ii]/bar_to_Pa;
+// Set up NodeArray and ParticleArray classes after reading gems3k files
+int TGEM2MT::restore_data_from_gems3k()
+{
+    int ii;
+    CalcIPM(NEED_GEM_AIA, 0, mtp->nC); //recalc all nodes ?
+
+    /// copy mtp->nTai and mtp->nPai from gems3k ????
+
+    for(ii=0; ii<mtp->nTai; ++ii) {
+        mtp->Tval[ii] = na->pCSD()->TKval[ii]-C_to_K;
+    }
+    for(ii=0; ii<mtp->nPai; ++ii) {
+        mtp->Pval[ii] = na->pCSD()->Pval[ii]/bar_to_Pa;
+    }
 
     // use particles
-    if( mtp->PsMode == RMT_MODE_W  )
-    {
-        na->SetGrid( mtp->sizeLc, mtp->grid );   // set up grid structure
-        pa_mt = new TParticleArray( mtp->nPTypes, mtp->nProps,
-                                    mtp->NPmean, mtp->ParTD, mtp->nPmin, mtp->nPmax, na.get() );
+    if(mtp->PsMode == RMT_MODE_W) {
+        na->SetGrid(mtp->sizeLc, mtp->grid);   // set up grid structure
+        pa_mt = new TParticleArray(mtp->nPTypes, mtp->nProps,
+                                   mtp->NPmean, mtp->ParTD, mtp->nPmin, mtp->nPmax, na.get());
         pa_mt->setUpCounters();
     }
     // put HydP
-    if( mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B )
-    {
-        putHydP( na->pNodT0() );
-        putHydP( na->pNodT1() );
+    if(mtp->PsMode != RMT_MODE_S && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
+        putHydP(na->pNodT0());
+        putHydP(na->pNodT1());
     }
+    return 0;
+}
+
+// Here we read the MULTI structure, DATACH and DATABR strings prepared from GEMS
+int TGEM2MT::gems3k_strings(const std::string& dch_json, const std::string& ipm_json,
+                            const std::vector<std::string>& dbr_json)
+{
+    // define name of vtk file
+    default_VTK("");
+
+    // Prepare the array for initial conditions allocation
+    std::vector<long int> nodeType;
+    for(int ii=0; ii<mtp->nC; ++ii) {
+        nodeType.push_back(mtp->DiCp[ii][0]);
+    }
+
+    // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
+    if(na->GEM_init(dch_json, ipm_json, dbr_json, nodeType.data())) {
+        // ???? add logger
+        return 1;  // error reading files
+    }
+    return 0;
+}
+
+int TGEM2MT::MassTransInit(const std::string &ipm_lst_file, const std::string &dbr_lst_file)
+{
+    math_transport_init();
+    if(gem3k_files_read(ipm_lst_file, dbr_lst_file)) {
+        return 1;
+    }
+    restore_data_from_gems3k();
     return 0;
 }
 
@@ -258,53 +283,13 @@ int TGEM2MT::MassTransInit( const char *lst_f_name, const char *dbr_lst_f_name )
 int TGEM2MT::MassTransStringInit(const std::string& dch_json, const std::string& ipm_json,
                                  const std::vector<std::string>& dbr_json)
 {
-    int ii;
-    if( pathVTK.empty() )
-    {
-        pathVTK = "VTK/";
+    math_transport_init();
+    if(gems3k_strings(dch_json, ipm_json, dbr_json)) {
+        return 1;
     }
-    if( nameVTK.empty() )
-    {
-        nameVTK = "vtk";
-        prefixVTK = nameVTK;
-    }
-
-    // The NodeArray must be allocated here
-    na = TNodeArray::create(mtp->nC);
-    TNodeArray::na = na.get();
-    // Prepare the array for initial conditions allocation
-    std::vector<long int> nodeType;
-    for( ii =0; ii<mtp->nC; ii++ )
-        nodeType.push_back(mtp->DiCp[ii][0]);
-
-    // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
-    if( na->GEM_init( dch_json, ipm_json, dbr_json, nodeType.data() ) )
-        return 1;  // error reading files
-
-    CalcIPM( NEED_GEM_AIA, 0, mtp->nC); //recalc all nodes ?
-
-    for( ii=0; ii< mtp->nTai; ii++)
-        mtp->Tval[ii] =  na->pCSD()->TKval[ii]-C_to_K;
-    for( ii=0; ii< mtp->nPai; ii++)
-        mtp->Pval[ii] =  na->pCSD()->Pval[ii]/bar_to_Pa;
-
-    // use particles
-    if( mtp->PsMode == RMT_MODE_W  )
-    {
-        na->SetGrid( mtp->sizeLc, mtp->grid );   // set up grid structure
-        pa_mt = new TParticleArray( mtp->nPTypes, mtp->nProps,
-                                    mtp->NPmean, mtp->ParTD, mtp->nPmin, mtp->nPmax, na.get() );
-        pa_mt->setUpCounters();
-    }
-    // put HydP
-    if( mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B )
-    {
-        putHydP( na->pNodT0() );
-        putHydP( na->pNodT1() );
-    }
+    restore_data_from_gems3k();
     return 0;
 }
-
 
 //==========================================================================================
 
@@ -637,9 +622,8 @@ void TGEM2MT::mem_new(int q)
 //=============================================================
 
 // Conversion of concentration units to moles
-//
 double TGEM2MT::Reduce_Conc( char UNITP, double Xe, double DCmw, double Vm,
-    double R1, double Msys, double Mwat, double Vaq, double Maq, double Vsys )
+                            double R1, double Msys, double Mwat, double Vaq, double Maq, double Vsys )
 {
     double Xincr = 0.;
     switch( UNITP )

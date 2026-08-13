@@ -50,7 +50,7 @@ include($$GEMS3K_CPP/gems3k.pri)
 HEADERS	 +=  m_gem2mt.h \
              particlearray.h
 
-SOURCES  +=   main.cpp \
+SOURCES  +=   test_main.cpp \
               particlearray.cpp \
               m_gem2mtsep.cpp \
               m_gem2mtt.cpp \

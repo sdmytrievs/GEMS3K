@@ -358,7 +358,7 @@ class TGEM2MT
 
     // new callback API
 
-    std::shared_ptr<spdlog::logger> logfile;
+    std::shared_ptr<spdlog::logger> main_logfile;
     std::shared_ptr<spdlog::logger> ph_file;
     std::shared_ptr<spdlog::logger> diff_log_file;
 
@@ -492,11 +492,11 @@ protected:
         double R1, double Msys, double Mwat, double Vaq, double Maq, double Vsys );
 
     // write/read gem2mt structure
-    int ReadTask( const char *gem2mt_in1, const char *vtk_dir );
-    int ReadTaskString( const std::string json_string );
-    int WriteTask( const char *unsp_in1 );
+    int ReadTask(const std::string& gem2mt_in1, const std::string& vtk_dir);
+    int ReadTaskString(const std::string json_string);
+    int WriteTask(const std::string& unsp_in1);
 
-    int MassTransInit( const char *lst_f_name, const char *dbr_lst_f_name );
+    int MassTransInit(const std::string& ipm_lst_file, const std::string& dbr_lst_file);
     int MassTransStringInit(const std::string& dch_json, const std::string& ipm_json,
                             const std::vector<std::string>& dbr_json);
     void RecCalc();
@@ -518,6 +518,11 @@ protected:
    void savePoint();
 
    GEMS3KGenerator GEMS3k_generator();
+   void default_VTK(const std::string &work_path);
+   void math_transport_init();
+   int gem3k_files_read(const std::string &ipm_lst_file, const std::string &dbr_lst_file);
+   int restore_data_from_gems3k();
+   int gems3k_strings(const std::string &dch_json, const std::string &ipm_json, const std::vector<std::string> &dbr_json);
 };
 
 enum gem2mt_inernal {

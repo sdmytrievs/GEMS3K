@@ -56,12 +56,11 @@ void  TGEM2MT::copyNodeArrays()
 // put HydP
 void  TGEM2MT::putHydP( DATABRPTR* C0 )
 {
-    for( long int jj=0; jj<mtp->nC; jj ++)
-    {
+    for(long int jj=0; jj<mtp->nC; ++jj)  {
         C0[jj]->NodeTypeHY = mtp->DiCp[jj][1];
 #ifndef NO_NODEARRAYLEVEL
-        if( mtp->HydP )
-        { C0[jj]->Vt = mtp->HydP[jj][0];
+        if( mtp->HydP ) {
+            C0[jj]->Vt = mtp->HydP[jj][0];
             C0[jj]->vp = mtp->HydP[jj][1];
             C0[jj]->eps = mtp->HydP[jj][2];
             C0[jj]->Km = mtp->HydP[jj][3];
@@ -772,8 +771,8 @@ void TGEM2MT::alloc_loggers()
         diff_log_file = spdlog::basic_logger_mt("ic_diff_log", "ICdif-log2.dat", true);
         diff_log_file->set_pattern("%v");
 
-        logfile = spdlog::basic_logger_mt("ic_aq_log", "ICaq-log2.dat", true);
-        logfile->set_pattern("%v");
+        main_logfile = spdlog::basic_logger_mt("ic_aq_log", "ICaq-log2.dat", true);
+        main_logfile->set_pattern("%v");
 
         ph_file = spdlog::basic_logger_mt("ph_log", "Ph-log2.dat", true);
         ph_file->set_pattern("%v");
@@ -786,7 +785,7 @@ void TGEM2MT::point_to_loggers()
     long int evrt =10;
 
     na->logDiffsIC(diff_log_file.get(), mtp->ct, mtp->cTau, mtp->nC, evrt);
-    na->logProfileAqIC(logfile.get(), mtp->ct, mtp->cTau, mtp->nC, evrt);
+    na->logProfileAqIC(main_logfile.get(), mtp->ct, mtp->cTau, mtp->nC, evrt);
     na->logProfilePhMol(ph_file.get(), std::bind(&TGEM2MT::logProfilePhMol, this,std::placeholders::_1, std::placeholders::_2),
                         mtp->ct, mtp->cTau, mtp->nC, evrt);
 
