@@ -475,6 +475,7 @@ protected:
     std::shared_ptr<TNodeArray> nodeArray()
     { return na; }
     explicit TGEM2MT( size_t nrt );
+    explicit TGEM2MT(char ps_mode, long int  n_nodes);
 
     ~TGEM2MT();
 
@@ -523,6 +524,217 @@ protected:
    int gem3k_files_read(const std::string &ipm_lst_file, const std::string &dbr_lst_file);
    int restore_data_from_gems3k();
    int gems3k_strings(const std::string &dch_json, const std::string &ipm_json, const std::vector<std::string> &dbr_json);
+   int alloc_gem2mt_arrays();
+
+   /// Get the full name of this GEM2MT task
+   std::string name() const
+   {
+       return char_array_to_string(mtp->name, MAXFORMULA);
+   }
+   /// Set the full name of this GEM2MT task
+   void setName(const std::string& task_name)
+   {
+       strncpy(mtp->name, task_name.c_str(), MAXFORMULA-1);
+       mtp->name[MAXFORMULA-1]='\0';
+   }
+
+   /// Get the comment of this GEM2MT task
+   std::string comment() const
+   {
+       return char_array_to_string(mtp->notes, MAXFORMULA);
+   }
+   /// Set the comment of this GEM2MT task
+   void setComment(const std::string& task_notes)
+   {
+       strncpy(mtp->notes, task_notes.c_str(), MAXFORMULA-1);
+       mtp->name[MAXFORMULA-1]='\0';
+   }
+
+   // (1) Allocation and setup flags
+   /// PvMSt,    // Use math script for start setup (+ -)?
+   /// PvMSg,    // Use math script for graphic presentation (+ -)?
+   /// PvMSc,    // Use math script for control on time steps (+ -)?
+
+   /// PvPGD: Use mobile phase groups definitions (+ -) (default -)
+   //  posible for type or if array
+   /// PvFDL: Use MGP flux definition list (+ -) (default -)
+   //  posible for type or if array
+   /// PvSFL: Use source fluxes and elemental stoichiometries for them (+ -) (default -)
+   //  posible for type or if array
+   /// PvGrid: Use array of grid point locations (+ -)
+   //  posible for type or if array
+   /// PvDDc:  Use diffusion coefficients for DC - DDc vector (+ -) (default -)
+   //   <PvDDc>  '-'  saved to data_CH->DD;  but mode in calculation important
+   ///  PvDIc:  Use diffusion coefficients for IC - DIc vector (+ -) (default -)
+   //   <PvDIc>  '-'  not used array in standalone but mode in calculation important
+   ///  PvnVTK: Use selected fields to VTK format (+ -) (default -)
+   // Would be selected after define xVTKfld as parameters
+
+   // (2) Controls on operation
+   /// PsSIA: Use smart initial approximation in GEM IPM (+); SIA internal (*); AIA (-)
+   void setSIA(char flag)
+   {
+       switch(flag) {
+       case '+':
+       case '-':
+           mtp->PsSIA = flag;
+           break;
+       case '*':
+       default:
+           mtp->PsSIA = '*';
+           break;
+       }
+   }
+
+   /// PsMO: Use non stop debug output for nodes (+ -) (default +)
+   void setOutput(bool enable) {
+       if(enable) {
+           mtp->PsMO = '+';
+       }
+       else {
+           mtp->PsMO = '-';
+       }
+   }
+   /// PsVTK: Use non stop debug output nodes to VTK format(+ -) (default -)
+   void setOutVTK(bool enable) {
+       if(enable) {
+           mtp->PsVTK = '+';
+       }
+       else {
+           mtp->PsVTK = '-';
+       }
+   }
+
+   /// PsMPh: Type flux Phase ( 0 undef, 1 - aq; 2 - gas; 3 - aq+gas, 4 - solids ) (default 1)
+   void setTypeFluxPhase(char flag)
+   {
+       switch(flag) {
+       case '2':
+       case '3':
+       case '4':
+           mtp->PsMPh = flag;
+           break;
+       case '1':
+       default:
+           mtp->PsMPh = '1';
+           break;
+       }
+   }
+
+   // (3) Dimensions for gem2mt (memory allocation)
+   /// Tau:   Physical time iterator (start,end,step)
+   void setTau(double start, double end, double step)
+   {
+       mtp->Tau[START_]=start;
+       mtp->Tau[STOP_]=end;
+       mtp->Tau[STEP_]=step;
+   }
+   /// sizeLc:  Spatial dimensions of the medium defines topology of nodes ( x y z )
+   void setSpatialDimensions(double x, double y, double z)
+   {
+       mtp->sizeLc[0]=x;
+       mtp->sizeLc[1]=y;
+       mtp->sizeLc[2]=z;
+   }
+
+
+   // (4) Input for compositions of initial systems
+   /// InpSys: Masses (kg) (total mass, normalize)
+   void setTotlMass(double val)
+   {
+       mtp->Msysb = val;
+   }
+   /// Vsysb:  Vs (total volume of the object, for volume concentrations)
+   void setTotalVolume(double val)
+   {
+       mtp->Vsysb = val;
+   }
+   /// Mwatb:  M(H2O) (mass of water-solvent for molalities)
+   void setMassofWaterSolvent(double val)
+   {
+       mtp->Mwatb = val;
+   }
+   /// Maqb:   Maq (mass of aqueous solution for ppm etc.)
+   void setMassofAqueousSolution(double val)
+   {
+       mtp->Maqb = val;
+   }
+   /// Vaqb:   Vaq (volume of aqueous solution for molarities)
+   void setVolumeofAqueousSolution(double val)
+   {
+       mtp->Vaqb = val;
+   }
+   /// Pgb:   Pg (pressure in gas, for partial pressures)
+   void setPressureinGas(double val)
+   {
+       mtp->Pgb = val;
+   }
+   /// Tmolb:  MOL total mole amount for basis sub-system composition calculations
+   void setTotalMoleAmount(double val)
+   {
+       mtp->Tmolb = val;
+   }
+   /// WmCb:  mole fraction of the carrier DC (e.g. sorbent or solvent)
+   void setMoleFraction(double val)
+   {
+       mtp->Tmolb = val;
+   }
+   /// TauAsur:  Specific surface area of the sorbent (for adsorbed species)
+   void setSpecificSurfaceArea(double val)
+   {
+       mtp->Asur = val;
+   }
+   /// tf:  Advection/diffusion mass transport: time step reduction factor (usually 1)
+   void setTimeStepReductionFactor(double val)
+   {
+       mtp->tf = val;
+   }
+   /// Vt:  Initial total node volume (m^3)
+   void setInitialTotalNodeVolume(double val)
+   {
+       mtp->vol_in = val;
+   }
+   /// vp:  Fluid advection velocity (m/sec)
+   void setFluidAdvectionVelocity(double val)
+   {
+       mtp->fVel = val;
+   }
+   /// eps:  Initial node effective porosity (0 < eps < 1), usually 1
+   void setInitialNodeEffectivePorosity(double val)
+   {
+       mtp->eps_in = val;
+   }
+   /// Km:  Initial effective permeability, m2, usually 1
+   void setInitialEffectivePermeability(double val)
+   {
+       mtp->Km_in = val;
+   }
+   /// al:  Initial value of specific longitudinal dispersivity (m), usually 1e-3
+   void setInitialDispersivity(double val)
+   {
+       mtp->al_in = val;
+   }
+   /// Dif:  Initial general aqueous medium diffusivity (m2/sec), usually 1e-9
+   void setInitialDiffusivity(double val)
+   {
+       mtp->Dif_in = val;
+   }
+   /// nto:  Initial tortuosity factor, usually 1
+   void setInitialTortuosityFactor(double val)
+   {
+       mtp->nto_in = val;
+   }
+   /// cdv:   Cutoff for IC amount differences in the node between time steps (mol), usually 1e-9
+   void setCutofffICamount(double val)
+   {
+       mtp->cdv = val;
+   }
+   /// cez:   Cutoff for minimal amounts of IC in node bulk compositions (mol), usually 1e-12
+   void setCutoffMinimalAmountsIC(double val)
+   {
+       mtp->cez = val;
+   }
+
 };
 
 enum gem2mt_inernal {

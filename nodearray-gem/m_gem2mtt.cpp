@@ -827,6 +827,10 @@ bool TGEM2MT::accept_point(long int mtp_cp, std::string message, int prog, int t
 
 void TGEM2MT::log_vtk()
 {
+    if(mtp->PvnVTK == S_OFF) {
+        return; // no output defined
+    }
+
     std::string fname = std::to_string(mtp->ct)+".vtk";
     fname = pathVTK + nameVTK + "/" + prefixVTK + fname;
 
@@ -858,96 +862,82 @@ void TGEM2MT::CalcControlScript()
 }
 
 // Calculation of control script at RT problem initialization stage
+// Initialization part at zero (time) step
 void TGEM2MT::CalcStartScript()
 {
-    if(mtp->PvMSt == S_OFF) {
-        return;
+    // if(mtp->PvMSt == S_OFF) {
+    //     return;
+    // }
+
+    // generate DiCp, HydP
+    for(long int ii=0; ii< mtp->nC; ++ii) {
+        mtp->jt = ii;
+        mtp->qc = ii; // index of node
+
+        //  Assign different fluid and rock composition indices to nodes (assuming fluid=0 and rock=1)
+        if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
+            // for A or C mode, nodes 0 and 1 contain the initial fluid
+            mtp->DiCp[mtp->qc][0] = (mtp->qc==0 || mtp->qc==1 ? 0 : (mtp->nIV>1 ?  1 : 0 ));
+        }
+        else {
+            // for other modes, one Cauchy source is sufficient
+            // Node 0 contains initial fluid, for more nodes change as: ( qc=0 | qc=XX )
+            mtp->DiCp[mtp->qc][0] = (mtp->qc==0 ? 0 : (mtp->nIV>1 ?  1 : 0));
+        }
+
+        if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
+            // for A and C mode, we need two first nodes as Cauchy sources
+            // for A or C mode, nodes 0 and 1 are set to a constant-flux source
+            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 || mtp->qc==1 ? 3 : 0);
+        }
+        else if(mtp->PsMode == RMT_MODE_B || mtp->PsMode == RMT_MODE_F) {
+            //  for B or F mode, node 0 is set to a constant-flux source
+            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3: 0 );
+            //mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? (mtp->nSFD==1? 0: 3) : 0);
+        }
+        else {
+            // One Cauchy source is sufficient
+            // Node 0 is set as source, for more sources change as: ( qc=0 | qc=XX )
+            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3 : 0);
+        }
+
+        if(mtp->PsMode == RMT_MODE_B)  {// Random-walk sink fix
+            //  Other nodes normal, the last two set as constant source and sink
+            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-2 ? mtp->DiCp[mtp->qc][1]: 3);
+            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
+        }
+        else {
+            // Other nodes normal, the last one is set as a constant-flux sink
+            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
+        }
+
+        if(mtp->HydP && mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
+            //  Initial total volume of the node, m3 (for porosity)
+            mtp->HydP[mtp->qc][0] = mtp->vol_in;
+            //  Initial advection velocity, m/s
+            mtp->HydP[mtp->qc][1] = mtp->fVel;
+            //  Initial effective porosity
+            mtp->HydP[mtp->qc][2] = mtp->eps_in;
+            //  Initial effective permeability
+            mtp->HydP[mtp->qc][3] = mtp->Km_in;
+            //  Initial specific longitudinal dispersivity
+            mtp->HydP[mtp->qc][4] = mtp->al_in;
+            //  Initial general diffusivity
+            mtp->HydP[mtp->qc][5] = mtp->Dif_in;
+            //  Initial tortuosity factor
+            mtp->HydP[mtp->qc][6] = mtp->nto_in;
+        }
     }
 
-    // generate Ti, Pi, Vi, DiCp, HydP, ... and fluxes arrays
-    for(long int ii=0; ii< std::max( mtp->nC, mtp->nFD ); ++ii) {
-        mtp->jt = std::min(ii, mtp->nC-1);
-        mtp->qc = std::min(ii, mtp->nC-1);  // index of node
-        mtp->qf = std::min(ii, mtp->nFD-1);  // index of flux
 
-        // Initialization part at zero (time) step
-        if( mtp->nC>0 && mtp->qc<mtp->nC) {
-            //  Initial setup of cells (nodes, boxes)
+    // generate fluxes arrays
+    if( mtp->PvFDL == S_OFF /*(nFD > 0) & (qf < nFD)*/)  {
+        for(long int ii=0; ii< mtp->nFD; ++ii) {
+            mtp->jt = std::min(ii, mtp->nC-1);
+            mtp->qc = std::min(ii, mtp->nC-1);  // index of node
+            mtp->qf = std::min(ii, mtp->nFD-1);  // index of flux
 
-            //  Assign different fluid and rock composition indices to nodes (assuming fluid=0 and rock=1)
-            if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
-                // for A or C mode, nodes 0 and 1 contain the initial fluid
-                mtp->DiCp[mtp->qc][0] = (mtp->qc==0 || mtp->qc==1 ? 0 : (mtp->nIV>1 ?  1 : 0 ));
-            }
-            else {
-                // for other modes, one Cauchy source is sufficient
-                // Node 0 contains initial fluid, for more nodes change as: ( qc=0 | qc=XX )
-                mtp->DiCp[mtp->qc][0] = (mtp->qc==0 ? 0 : (mtp->nIV>1 ?  1 : 0));
-            }
 
-            if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
-                // for A and C mode, we need two first nodes as Cauchy sources
-                // for A or C mode, nodes 0 and 1 are set to a constant-flux source
-                mtp->DiCp[mtp->qc][1] = (mtp->qc==0 || mtp->qc==1 ? 3 : 0);
-            }
-            else if(mtp->PsMode == RMT_MODE_B || mtp->PsMode == RMT_MODE_F) {
-                //  for B or F mode, node 0 is set to a constant-flux source
-                mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3: 0 );
-                //mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? (mtp->nSFD==1? 0: 3) : 0);
-            }
-            else {
-                // One Cauchy source is sufficient
-                // Node 0 is set as source, for more sources change as: ( qc=0 | qc=XX )
-                mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3 : 0);
-            }
-
-            if(mtp->PsMode == RMT_MODE_B)  {// Random-walk sink fix
-                //  Other nodes normal, the last two set as constant source and sink
-                mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-2 ? mtp->DiCp[mtp->qc][1]: 3);
-                mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
-            }
-            else {
-                // Other nodes normal, the last one is set as a constant-flux sink
-                mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
-            }
-
-            // Set initial node pressures (change 0 in qc*0 to set a gradient)
-            mtp->StaP[mtp->qc][0] = mtp->PTVm[mtp->DiCp[mtp->qc][0]][0] + mtp->qc*0;
-            if(mtp->PsMode == RMT_MODE_S || mtp->PsMode == RMT_MODE_F) {
-                mtp->Pval[mtp->qc] = mtp->StaP[mtp->qc][0];  // PVal nPai
-            }
-
-            // Set initial node temperatures (change 0 in qc*0 to set a gradient)
-            mtp->StaP[mtp->qc][1] = mtp->PTVm[mtp->DiCp[mtp->qc][0]][1] + mtp->qc*0;
-            if(mtp->PsMode == RMT_MODE_S || mtp->PsMode == RMT_MODE_F) {
-                mtp->Tval[mtp->qc] = mtp->StaP[mtp->qc][1]; //? Tval nTai
-            }
-
-            // Volume constraint for GEM (usually 0) - change to AMR on water vapor?
-            mtp->StaP[mtp->qc][2] = mtp->PTVm[mtp->DiCp[mtp->qc][0]][2];
-
-            // Initial (reactive) mass of the node
-            mtp->StaP[mtp->qc][3] = mtp->PTVm[mtp->DiCp[mtp->qc][0]][3];
-
-            if(mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
-                //  Initial total volume of the node, m3 (for porosity)
-                mtp->HydP[mtp->qc][0] = mtp->vol_in;
-                //  Initial advection velocity, m/s
-                mtp->HydP[mtp->qc][1] = mtp->fVel;
-                //  Initial effective porosity
-                mtp->HydP[mtp->qc][2] = mtp->eps_in;
-                //  Initial effective permeability
-                mtp->HydP[mtp->qc][3] = mtp->Km_in;
-                //  Initial specific longitudinal dispersivity
-                mtp->HydP[mtp->qc][4] = mtp->al_in;
-                //  Initial general diffusivity
-                mtp->HydP[mtp->qc][5] = mtp->Dif_in;
-                //  Initial tortuosity factor
-                mtp->HydP[mtp->qc][6] = mtp->nto_in;
-            }
-        } // end of initialization of cells (nodes, boxes)
-
-        if( mtp->PvFDL == S_OFF /*(nFD > 0) & (qf < nFD)*/)  {
             //   initialisation of tables for properties of fluxes
             if(mtp->qf == mtp->qc) {
                 // Setting the chain of unidirectional fluxes connecting boxes
@@ -1006,7 +996,6 @@ void TGEM2MT::CalcStartScript()
 
             } // end of initialization of fluxes
         }
-        // end of initialization at ct=0
     }
 }
 

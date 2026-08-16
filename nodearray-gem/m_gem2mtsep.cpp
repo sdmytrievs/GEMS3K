@@ -31,6 +31,18 @@ TGEM2MT::TGEM2MT( size_t /*nrt*/ )
     pa_mt = 0;
 }
 
+TGEM2MT::TGEM2MT(char ps_mode, long n_nodes)
+{
+    mtp=&mt[0];
+    set_def(0);
+    ////mtp->PvMO =   S_ON;
+    ////mtp->iStat =  AS_READY;
+    na = 0;
+    pa_mt = 0;
+    mtp->PsMode = ps_mode;
+    mtp->nC = n_nodes;
+}
+
 TGEM2MT::~TGEM2MT()
 {
     mem_kill(0);
@@ -288,6 +300,19 @@ int TGEM2MT::MassTransStringInit(const std::string& dch_json, const std::string&
         return 1;
     }
     restore_data_from_gems3k();
+    return 0;
+}
+
+
+int TGEM2MT::alloc_gem2mt_arrays()
+{
+    // check sizes
+
+    // realloc memory
+    mem_new(0);
+
+    // set defaults
+    CalcStartScript();
     return 0;
 }
 
