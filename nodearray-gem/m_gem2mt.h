@@ -524,7 +524,6 @@ protected:
    int gem3k_files_read(const std::string &ipm_lst_file, const std::string &dbr_lst_file);
    int restore_data_from_gems3k();
    int gems3k_strings(const std::string &dch_json, const std::string &ipm_json, const std::vector<std::string> &dbr_json);
-   int alloc_gem2mt_arrays();
 
    /// Get the full name of this GEM2MT task
    std::string name() const
@@ -628,6 +627,7 @@ protected:
        mtp->Tau[START_]=start;
        mtp->Tau[STOP_]=end;
        mtp->Tau[STEP_]=step;
+       mtp->ntM = (mtp->Tau[STOP_]-mtp->Tau[START_])/(mtp->Tau[STEP_])+1;
    }
    /// sizeLc:  Spatial dimensions of the medium defines topology of nodes ( x y z )
    void setSpatialDimensions(double x, double y, double z)
@@ -735,6 +735,10 @@ protected:
        mtp->cez = val;
    }
 
+   void defaults_DiCp();
+   void defaults_HydP();
+   void defaults_FDLi_FDLf();
+   void math_transport_defaults();
 };
 
 enum gem2mt_inernal {

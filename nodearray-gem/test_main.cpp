@@ -155,11 +155,8 @@ int task_A(const std::string& ipm_lst, const std::string& dbr_lst)
     // Set  cutoff for minimal amounts of IC in node bulk compositions (mol), usually 1e-12
     mt_task->setCutoffMinimalAmountsIC(1e-11);
 
-
-    // Here we define the GEM2MT structure
-    mt_task->alloc_gem2mt_arrays();
-
     // Update input arrays
+
 
     // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
     if(TGEM2MT::pm->MassTransInit(ipm_lst, dbr_lst)) {
@@ -169,7 +166,7 @@ int task_A(const std::string& ipm_lst, const std::string& dbr_lst)
     TGEM2MT::pm->WriteTask("gem2mt_out.dat");
 
     // here we call the mass-transport finite-difference coupled routine
-    TGEM2MT::pm->RecCalc();
+    //TGEM2MT::pm->RecCalc();
 
     return 0;
 }

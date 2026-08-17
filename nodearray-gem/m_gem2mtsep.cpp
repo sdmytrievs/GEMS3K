@@ -41,6 +41,8 @@ TGEM2MT::TGEM2MT(char ps_mode, long n_nodes)
     pa_mt = 0;
     mtp->PsMode = ps_mode;
     mtp->nC = n_nodes;
+
+    math_transport_defaults();
 }
 
 TGEM2MT::~TGEM2MT()
@@ -87,7 +89,7 @@ int TGEM2MT::ReadTask(const std::string& gem2mt_file, const std::string& vtk_dir
     try {
         std::string gem2mt_in = gem2mt_file;
         std::fstream ff(gem2mt_in, std::ios::in );
-        ErrorIf( !ff.good() , gem2mt_in, "Fileopen error");
+        ErrorIf(!ff.good(), gem2mt_in, "Fileopen error");
 
         if(gem2mt_in.rfind(".json") != std::string::npos) {
 #ifdef USE_NLOHMANNJSON
@@ -198,13 +200,176 @@ void TGEM2MT::default_VTK(const std::string& work_path)
     prefixVTK = nameVTK;
 }
 
+// Default initialization DiCp
+void TGEM2MT::defaults_DiCp()
+{
+    for(long int ii=0; ii< mtp->nC; ++ii) {
+        mtp->qc = ii; // index of node
+
+        //  Assign different fluid and rock composition indices to nodes (assuming fluid=0 and rock=1)
+        if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
+            // for A or C mode, nodes 0 and 1 contain the initial fluid
+            mtp->DiCp[mtp->qc][0] = (mtp->qc==0 || mtp->qc==1 ? 0 : (mtp->nIV>1 ?  1 : 0 ));
+        }
+        else {
+            // for other modes, one Cauchy source is sufficient
+            // Node 0 contains initial fluid, for more nodes change as: ( qc=0 | qc=XX )
+            mtp->DiCp[mtp->qc][0] = (mtp->qc==0 ? 0 : (mtp->nIV>1 ?  1 : 0));
+        }
+
+        if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
+            // for A and C mode, we need two first nodes as Cauchy sources
+            // for A or C mode, nodes 0 and 1 are set to a constant-flux source
+            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 || mtp->qc==1 ? 3 : 0);
+        }
+        else if(mtp->PsMode == RMT_MODE_B || mtp->PsMode == RMT_MODE_F) {
+            //  for B or F mode, node 0 is set to a constant-flux source
+            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3: 0 );
+            //mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? (mtp->nSFD==1? 0: 3) : 0);
+        }
+        else {
+            // One Cauchy source is sufficient
+            // Node 0 is set as source, for more sources change as: ( qc=0 | qc=XX )
+            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3 : 0);
+        }
+
+        if(mtp->PsMode == RMT_MODE_B)  {// Random-walk sink fix
+            //  Other nodes normal, the last two set as constant source and sink
+            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-2 ? mtp->DiCp[mtp->qc][1]: 3);
+            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
+        }
+        else {
+            // Other nodes normal, the last one is set as a constant-flux sink
+            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
+        }
+    }
+}
+
+// Default initialization HydP
+void TGEM2MT::defaults_HydP()
+{
+    for(long int ii=0; ii< mtp->nC; ++ii) {
+        mtp->qc = ii; // index of node
+
+        if(mtp->HydP && mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
+            //  Initial total volume of the node, m3 (for porosity)
+            mtp->HydP[mtp->qc][0] = mtp->vol_in;
+            //  Initial advection velocity, m/s
+            mtp->HydP[mtp->qc][1] = mtp->fVel;
+            //  Initial effective porosity
+            mtp->HydP[mtp->qc][2] = mtp->eps_in;
+            //  Initial effective permeability
+            mtp->HydP[mtp->qc][3] = mtp->Km_in;
+            //  Initial specific longitudinal dispersivity
+            mtp->HydP[mtp->qc][4] = mtp->al_in;
+            //  Initial general diffusivity
+            mtp->HydP[mtp->qc][5] = mtp->Dif_in;
+            //  Initial tortuosity factor
+            mtp->HydP[mtp->qc][6] = mtp->nto_in;
+        }
+    }
+}
+
+// Default initialization FDLf, FDLi
+void TGEM2MT::defaults_FDLi_FDLf()
+{
+     // generate fluxes arrays
+    if( mtp->PvFDL == S_OFF /*(nFD > 0) & (qf < nFD)*/)  {
+        for(long int ii=0; ii< mtp->nFD; ++ii) {
+            mtp->jt = std::min(ii, mtp->nC-1);
+            mtp->qc = std::min(ii, mtp->nC-1);  // index of node
+            mtp->qf = std::min(ii, mtp->nFD-1);  // index of flux
+
+            //   initialisation of tables for properties of fluxes
+            if(mtp->qf == mtp->qc) {
+                // Setting the chain of unidirectional fluxes connecting boxes
+                if(mtp->PsMode == RMT_MODE_S) {
+                    // flux from node/box
+                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0? 0: mtp->FDLi[mtp->qf-1][1] );
+                    // flux to node/box
+                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1? mtp->qf+1: -1);
+                    // flux order zero (constant mass per step)
+                    mtp->FDLf[mtp->qf][0] = 0;
+                    // flux rate 1 (the whole fluid mass)
+                    mtp->FDLf[mtp->qf][1] = 1;
+                }
+                if(mtp->PsMode == RMT_MODE_F) {
+                    // flux from node/box
+                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0 ? 0: mtp->FDLi[mtp->qf-1][1] );
+                    // flux to node/box
+                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1 ? mtp->qf+1 : -1);
+                    // flux order 1 (proportional to source MPG mass)
+                    mtp->FDLf[mtp->qf][0] = (mtp->qf==0 ? 0 : 1);
+                    //  flux rate constant
+                    mtp->FDLf[mtp->qf][1] = (mtp->qf==0 ? 1 : 0.1);
+                }
+                if(mtp->PsMode == RMT_MODE_B) {
+                    // flux from node/box
+                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0 ? 0: mtp->FDLi[mtp->qf-1][1]);
+                    // flux to node/box
+                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1 ? mtp->qf+1 : -1);
+                    // flux order 1 (proportional to source MPG mass)
+                    mtp->FDLf[mtp->qf][0] = (mtp->qf==0 ? 0 : 1);
+                    // flux rate constant
+                    mtp->FDLf[mtp->qf][1] = (mtp->qf==0? 1 : 0.1);
+                }
+            } // end of setting a chain of 1-dir fluxes connecting boxes
+
+            if(mtp->qf > mtp->nC-1 ) {
+                // additional fluxes (elemental remo/prod or arbitrary normal fluxes)
+                //  enter index 0 as MPG name in FDLmp[qf] column
+                //   group for first elemental removal or production row in BSF table
+                if(mtp->qf == mtp->nC) {
+                    mtp->FDLi[mtp->qf][0] = 30;
+                    mtp->FDLi[mtp->qf][1] = (-1);
+                    // flux order (0, 1 or 3), change as desired
+                    mtp->FDLf[mtp->qf][0] = 0;
+                    //  flux rate (constant): >0: removal; <0: production. Change as desired
+                    mtp->FDLf[mtp->qf][1] = 0.001;
+                } //  end of group - add below groups for other remo/prod rows in BSF table
+
+                //  for the second group, enter index 1 as MPG name in FDLmp[qf] column
+                //       if( qf = nC+1 ) {
+                //        .....
+                //     }
+                //  For arbitrary normal MPG fluxes between boxes, add groups like above
+                //  in setting the chain of fluxes
+                //    end of additional fluxes
+
+            } // end of initialization of fluxes
+        }
+    }
+}
+
+// Allocate math transport arrays
+void TGEM2MT::math_transport_defaults()
+{
+    // from set_def(int q), ask gem2mt users for better defaults
+    memset( &mtp->Msysb, 0, sizeof(double)*20 );
+    memset( mtp->size[0], 0, sizeof(float)*8 );
+
+    mtp->Tau[START_] = 0.;
+    mtp->Tau[STOP_] = 1000.;
+    mtp->Tau[STEP_] = 1.;
+    mtp->ntM =1000;
+    mtp->cdv = 1e-9;
+    mtp->cez = 1e-12;
+
+    // Alloc important arrays
+    mtp->DiCp = new long int[ mtp->nC][2];
+    defaults_DiCp();
+
+    // Alloc the NodeArray
+    na = TNodeArray::create(mtp->nC);
+    TNodeArray::na = na.get();
+}
 
 // Allocate math transport arrays
 void TGEM2MT::math_transport_init()
 {
     // The NodeArray must be allocated here
-    na = TNodeArray::create(mtp->nC);
-    TNodeArray::na = na.get();
+    //na = TNodeArray::create(mtp->nC);
+    //TNodeArray::na = na.get();
 }
 
 // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
@@ -235,7 +400,16 @@ int TGEM2MT::restore_data_from_gems3k()
     int ii;
     CalcIPM(NEED_GEM_AIA, 0, mtp->nC); //recalc all nodes ?
 
-    /// copy mtp->nTai and mtp->nPai from gems3k ????
+    // Restore sizes from gem3k arrays
+    mtp->Lsf = na->pCSD()->nDCs;
+    mtp->Nf = na->pCSD()->nIC;
+    mtp->FIf = na->pCSD()->nPH;
+    mtp->nTai = na->pCSD()->nTp;
+    mtp->nPai = na->pCSD()->nPp;
+
+    // realloc gem2mt memory
+    mem_new(0);
+    defaults_HydP();
 
     for(ii=0; ii<mtp->nTai; ++ii) {
         mtp->Tval[ii] = na->pCSD()->TKval[ii]-C_to_K;
@@ -282,7 +456,7 @@ int TGEM2MT::gems3k_strings(const std::string& dch_json, const std::string& ipm_
 
 int TGEM2MT::MassTransInit(const std::string &ipm_lst_file, const std::string &dbr_lst_file)
 {
-    math_transport_init();
+    //math_transport_init();
     if(gem3k_files_read(ipm_lst_file, dbr_lst_file)) {
         return 1;
     }
@@ -295,24 +469,11 @@ int TGEM2MT::MassTransInit(const std::string &ipm_lst_file, const std::string &d
 int TGEM2MT::MassTransStringInit(const std::string& dch_json, const std::string& ipm_json,
                                  const std::vector<std::string>& dbr_json)
 {
-    math_transport_init();
+    //math_transport_init();
     if(gems3k_strings(dch_json, ipm_json, dbr_json)) {
         return 1;
     }
     restore_data_from_gems3k();
-    return 0;
-}
-
-
-int TGEM2MT::alloc_gem2mt_arrays()
-{
-    // check sizes
-
-    // realloc memory
-    mem_new(0);
-
-    // set defaults
-    CalcStartScript();
     return 0;
 }
 
@@ -428,7 +589,9 @@ void TGEM2MT::mem_new(int q)
  }
  mtp->nam_i= new char[ mtp->nIV][ MAXIDNAME ];
  //- mtp->PTVm = new double[ mtp->nIV][5];
+ if(!mtp->DiCp) { // allocated in constructor
  mtp->DiCp = new long int[ mtp->nC][2];
+ }
  //- mtp->StaP = new double[ mtp->nC ][4];
 
  if( mtp->PvnVTK == S_OFF )
