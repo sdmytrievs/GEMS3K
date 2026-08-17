@@ -761,7 +761,7 @@ protected:
    }
 
    /// xFlds: Set list of selected fields and indexes to VTK format
-   void setVTfields(const std::vector<std::pair<int, int>>& vtk_fields);
+   void setVTKfields(const std::vector<std::pair<int, int>>& vtk_fields);
 
    void defaults_DiCp();
    void defaults_HydP();

@@ -16,7 +16,7 @@
 
 static int task_from_file(const std::string& gem2mt_file, const std::string& ipm_lst, const std::string& dbr_lst);
 static int task_A(const std::string& ipm_lst, const std::string& dbr_lst);
-
+static int task_C(const std::string& ipm_lst, const std::string& dbr_lst);
 
 //---------------------------------------------------------------------------
 // Test of 1D advection (finite difference method provided by Dr. F.Enzmann,
@@ -55,7 +55,8 @@ int main( int argc, char* argv[] )
 
     try{
         //return task_from_file(gem2mt_in1, ipm_lst, dbr_lst);
-        return task_A(ipm_lst, dbr_lst);
+        //return task_A(ipm_lst, dbr_lst);
+        return task_C(ipm_lst, dbr_lst);
     }
     catch(TError& err) {
         TNode::ipmlog_file->error("Error {} : {}", err.title, err.mess);
@@ -157,9 +158,9 @@ int task_A(const std::string& ipm_lst, const std::string& dbr_lst)
 
     // If need update input node distributing
     // Change index of initial system variant for the first node
-    mt_task->setDistributing(0, 0);
+    //mt_task->setDistributing(0, 0);
     // Change the type for for the first node
-    mt_task->setNodeType(0, 3);
+    //mt_task->setNodeType(0, 3);
 
     // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
     if(TGEM2MT::pm->MassTransInit(ipm_lst, dbr_lst)) {
@@ -168,7 +169,7 @@ int task_A(const std::string& ipm_lst, const std::string& dbr_lst)
 
     // Change/define some other gem2mt arrays
     // Set list of selected fields and indexes to VTK format
-    //mt_task->setVTfields({{38,1},{38,2}});
+    //mt_task->setVTKfields({{38,1},{38,2}});
 
     TGEM2MT::pm->WriteTask("gem2mt_out.dat");
 
@@ -177,6 +178,86 @@ int task_A(const std::string& ipm_lst, const std::string& dbr_lst)
 
     return 0;
 }
+
+// GUI record 'CalDolCol2:G:CalcColumn:0:0:1:25:0:1D-Cc-MgCl2-tmod:C:'
+int task_C(const std::string& ipm_lst, const std::string& dbr_lst)
+{
+    if(ipm_lst.empty() || dbr_lst.empty()) {
+        Error( "Start task", "No inital files");
+    }
+
+    // The NodeArray must be allocated here
+    std::shared_ptr<TGEM2MT> mt_task( new TGEM2MT('C', 101) );
+    TGEM2MT::pm = mt_task.get();
+
+    // Set up sizes, flags and values different from default
+    mt_task->setName("Test of 1D coupled advection problem (dissolved Ca, Mg)");
+    mt_task->setComment("@");
+
+    // Use smart initial approximation in GEM IPM (+); SIA internal (*); AIA (-)
+    mt_task->setSIA(S_OFF);
+    // Set type flux Phase ( 0 undef, 1 - aq; 2 - gas; 3 - aq+gas, 4 - solids ) (default 1)
+    mt_task->setTypeFluxPhase('1');
+    // Use non stop debug output for nodes (+ -) (default +)
+    mt_task->setOutput(true);
+
+    // Set physical time iterator (start,end,step)
+    mt_task->setTau(0, 30000, 3);
+    // Set spatial dimensions of the medium defines topology of nodes ( x y z )
+    mt_task->setSpatialDimensions(0.2, 0, 0);
+
+    // Set  M(H2O) (mass of water-solvent for molalities)
+    mt_task->setMassofWaterSolvent(1.);
+    // Set Maq (mass of aqueous solution for ppm etc.)
+    mt_task->setMassofAqueousSolution(1.);
+    // Set Vaq (volume of aqueous solution for molarities)
+    mt_task->setVolumeofAqueousSolution(1.);
+    // Set advection/diffusion mass transport: time step reduction factor (usually 1)
+    mt_task->setTimeStepReductionFactor(2.);
+    // Set initial total node volume (m^3)
+    mt_task->setInitialTotalNodeVolume(0.001);
+    // Set fluid advection velocity (m/sec)
+    mt_task->setFluidAdvectionVelocity(2e-6);
+    // Set initial node effective porosity (0 < eps < 1), usually 1
+    mt_task->setInitialNodeEffectivePorosity(0.5);
+    // Set initial effective permeability, m2, usually 1
+    mt_task->setInitialEffectivePermeability(1e-12);
+    // Set initial value of specific longitudinal dispersivity (m), usually 1e-3
+    mt_task->setInitialDispersivity(0.001);
+    // Set initial general aqueous medium diffusivity (m2/sec), usually 1e-9
+    mt_task->setInitialDiffusivity(2e-09);
+    // Set initial tortuosity factor, usually 1
+    mt_task->setInitialTortuosityFactor(1.);
+    // Set cutoff for IC amount differences in the node between time steps (mol), usually 1e-9
+    mt_task->setCutofffICamount(1e-9);
+    // Set  cutoff for minimal amounts of IC in node bulk compositions (mol), usually 1e-12
+    mt_task->setCutoffMinimalAmountsIC(1e-11);
+
+    // If need update input node distributing
+    // Change index of initial system variant for the first node
+    //mt_task->setDistributing(0, 0);
+    // Change the type for for the first node
+    //mt_task->setNodeType(0, 3);
+
+    // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
+    if(TGEM2MT::pm->MassTransInit(ipm_lst, dbr_lst)) {
+        return 1;  // error reading files
+    }
+
+    // Change/define some other gem2mt arrays
+    // Set list of selected fields and indexes to VTK format
+    mt_task->setVTKfields({{33,0},{32,0},{38,1},{38,4}});
+
+    TGEM2MT::pm->WriteTask("gem2mt_out.dat");
+
+    // here we call the mass-transport finite-difference coupled routine
+    TGEM2MT::pm->RecCalc();
+
+    return 0;
+}
+
+// GUI record 'CalDolCol2:G:CalcColumn:0:0:1:25:0:1D-DifMgCl2-center:W:'
+
 
 //---------------------------------------------------------------------------
 

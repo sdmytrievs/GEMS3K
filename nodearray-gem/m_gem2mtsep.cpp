@@ -468,7 +468,7 @@ int TGEM2MT::MassTransStringInit(const std::string& dch_json, const std::string&
     return 0;
 }
 
-void TGEM2MT::setVTfields(const std::vector<std::pair<int, int>> &vtk_fields)
+void TGEM2MT::setVTKfields(const std::vector<std::pair<int, int>> &vtk_fields)
 {
     if(mtp->xVTKfld) {
         delete[]  mtp->xVTKfld;
@@ -502,63 +502,168 @@ void TGEM2MT::mem_kill(int q)
     //- if( mtp->lNamE) delete[] mtp->lNamE;
     //- if( mtp->tExpr) delete[] mtp->tExpr;
     //- if( mtp->gExpr) delete[] mtp->gExpr;
-    if( mtp->sdref) delete[] mtp->sdref;
-    if( mtp->sdval) delete[] mtp->sdval;
-    if( mtp->DiCp) delete[] mtp->DiCp;
-    if( mtp->FDLi) delete[] mtp->FDLi;
+    if(mtp->sdref) {
+        delete[] mtp->sdref;
+        mtp->sdref = nullptr;
+    }
+    if(mtp->sdval) {
+        delete[] mtp->sdval;
+        mtp->sdval = nullptr;
+    }
+    if(mtp->DiCp) {
+        delete[] mtp->DiCp;
+        mtp->DiCp = nullptr;
+    }
+    if(mtp->FDLi) {
+        delete[] mtp->FDLi;
+        mtp->FDLi = nullptr;
+    }
     //- if( mtp->PTVm) delete[] mtp->PTVm;
     //- if( mtp->StaP) delete[] mtp->StaP;
-    if( mtp->xVTKfld) delete[] mtp->xVTKfld;
+    if(mtp->xVTKfld) {
+        delete[] mtp->xVTKfld;
+        mtp->xVTKfld = nullptr;
+    }
     //- if( mtp->xEt) delete[] mtp->xEt;
     //- if( mtp->yEt) delete[] mtp->yEt;
     //- if( mtp->Bn) delete[] mtp->Bn;
-    if( mtp->HydP) delete[] mtp->HydP;
+    if(mtp->HydP) {
+        delete[] mtp->HydP;
+        mtp->HydP = nullptr;
+    }
     //- if( mtp->qpi) delete[] mtp->qpi;
     //- if( mtp->qpc) delete[] mtp->qpc;
     //- if( mtp->xt) delete[] mtp->xt;
     //- if( mtp->yt) delete[] mtp->yt;
     //- if( mtp->CIb) delete[] mtp->CIb;
     //- if( mtp->CAb) delete[] mtp->CAb;
-    if( mtp->FDLf) delete[] mtp->FDLf;
-    if( mtp->PGT) delete[] mtp->PGT;
-    if( mtp->Tval) delete[] mtp->Tval;
-    if( mtp->Pval) delete[] mtp->Pval;
-    if( mtp->nam_i) delete[] mtp->nam_i;
+    if(mtp->FDLf) {
+        delete[] mtp->FDLf;
+        mtp->FDLf = nullptr;
+    }
+    if(mtp->PGT) {
+        delete[] mtp->PGT;
+        mtp->PGT = nullptr;
+    }
+    if(mtp->Tval) {
+        delete[] mtp->Tval;
+        mtp->Tval = nullptr;
+    }
+    if(mtp->Pval) {
+        delete[] mtp->Pval;
+        mtp->Pval = nullptr;
+    }
+    if(mtp->nam_i) {
+        delete[] mtp->nam_i;
+        mtp->nam_i = nullptr;
+    }
     //- if( mtp->for_i) delete[] mtp->for_i;
     //- if( mtp->stld) delete[] mtp->stld;
     //- if( mtp->CIclb) delete[] mtp->CIclb;
     //- if( mtp->AUcln) delete[] mtp->AUcln;
-    if( mtp->FDLid) delete[] mtp->FDLid;
-    if( mtp->FDLop) delete[] mtp->FDLop;
-    if( mtp->FDLmp) delete[] mtp->FDLmp;
-    if( mtp->MGPid) delete[] mtp->MGPid;
-    if( mtp->UMGP) delete[] mtp->UMGP;
+    if(mtp->FDLid) {
+        delete[] mtp->FDLid;
+        mtp->FDLid = nullptr;
+    }
+    if(mtp->FDLop) {
+        delete[] mtp->FDLop;
+        mtp->FDLop = nullptr;
+    }
+    if(mtp->FDLmp) {
+        delete[] mtp->FDLmp;
+        mtp->FDLmp = nullptr;
+    }
+    if(mtp->MGPid) {
+        delete[] mtp->MGPid;
+        mtp->MGPid = nullptr;
+    }
+    if(mtp->UMGP) {
+        delete[] mtp->UMGP;
+        mtp->UMGP = nullptr;
+    }
     //- if( mtp->SBM) delete[] mtp->SBM;
-    if( mtp->BSF) delete[] mtp->BSF;
-    if( mtp->MB) delete[] mtp->MB;
-    if( mtp->dMB) delete[] mtp->dMB;
-    if( mtp->DDc) delete[] mtp->DDc;
-    if( mtp->DIc) delete[] mtp->DIc;
-    if( mtp->DEl) delete[] mtp->DEl;
-    if( mtp->for_e) delete[] mtp->for_e;
+    if(mtp->BSF) {
+        delete[] mtp->BSF;
+        mtp->BSF = nullptr;
+    }
+    if(mtp->MB) {
+        delete[] mtp->MB;
+        mtp->MB = nullptr;
+    }
+    if(mtp->dMB) {
+        delete[] mtp->dMB;
+        mtp->dMB = nullptr;
+    }
+    if(mtp->DDc) {
+        delete[] mtp->DDc;
+        mtp->DDc = nullptr;
+    }
+    if(mtp->DIc) {
+        delete[] mtp->DIc;
+        mtp->DIc = nullptr;
+    }
+    if(mtp->DEl) {
+        delete[] mtp->DEl;
+        mtp->DEl = nullptr;
+    }
+    if(mtp->for_e) {
+        delete[] mtp->for_e;
+        mtp->for_e = nullptr;
+    }
     //- if( mtp->xIC) delete[] mtp->xIC;
     //- if( mtp->xDC) delete[] mtp->xDC;
     //- if( mtp->xPH) delete[] mtp->xPH;
-    if( mtp->grid) delete[] mtp->grid;
-    if( mtp->NPmean) delete[] mtp->NPmean;
-    if( mtp->nPmin) delete[] mtp->nPmin;
-    if( mtp->nPmax) delete[] mtp->nPmax;
-    if( mtp->ParTD) delete[] mtp->ParTD;
-    if( mtp->BM) delete[] mtp->BM;
-    if( mtp->BdM) delete[] mtp->BdM;
-    if( mtp->FmgpJ) delete[] mtp->FmgpJ;
-    if( mtp->BmgpM) delete[] mtp->BmgpM;
+    if(mtp->grid) {
+        delete[] mtp->grid;
+        mtp->grid = nullptr;
+    }
+    if(mtp->NPmean) {
+        delete[] mtp->NPmean;
+        mtp->NPmean = nullptr;
+    }
+    if(mtp->nPmin) {
+        delete[] mtp->nPmin;
+        mtp->nPmin = nullptr;
+    }
+    if(mtp->nPmax) {
+        delete[] mtp->nPmax;
+        mtp->sdref = nullptr;
+    }
+    if(mtp->ParTD) {
+        delete[] mtp->ParTD;
+        mtp->ParTD = nullptr;
+    }
+    if(mtp->BM) {
+        delete[] mtp->BM;
+        mtp->BM = nullptr;
+    }
+    if(mtp->BdM) {
+        delete[] mtp->BdM;
+        mtp->BdM = nullptr;
+    }
+    if(mtp->FmgpJ) {
+        delete[] mtp->FmgpJ;
+        mtp->FmgpJ = nullptr;
+    }
+    if(mtp->BmgpM) {
+        delete[] mtp->BmgpM;
+        mtp->BmgpM = nullptr;
+    }
     // work
     //- if( mtp->An) delete[] mtp->An;
     //- if( mtp->Ae) delete[] mtp->Ae;
-    if( mtp->gfc) delete[] mtp->gfc;
-    if( mtp->yfb) delete[] mtp->yfb;
-    if( mtp->tt) delete[] mtp->tt;
+    if(mtp->gfc) {
+        delete[] mtp->gfc;
+        mtp->gfc = nullptr;
+    }
+    if(mtp->yfb) {
+        delete[] mtp->yfb;
+        mtp->yfb = nullptr;
+    }
+    if(mtp->tt) {
+        delete[] mtp->tt;
+        mtp->tt = nullptr;
+    }
     //- if( mtp->etext) delete[] mtp->etext;
     //- if( mtp->tprn) delete[] mtp->tprn;
     //- FreeNa();
@@ -602,17 +707,22 @@ void TGEM2MT::mem_new(int q)
  }
  mtp->nam_i= new char[ mtp->nIV][ MAXIDNAME ];
  //- mtp->PTVm = new double[ mtp->nIV][5];
- if(!mtp->DiCp) { // allocated in constructor
- mtp->DiCp = new long int[ mtp->nC][2];
+ if(!mtp->DiCp) { // could be allocated in constructor
+     mtp->DiCp = new long int[ mtp->nC][2];
  }
  //- mtp->StaP = new double[ mtp->nC ][4];
 
- if( mtp->PvnVTK == S_OFF )
-    { if(mtp->xVTKfld) delete[] mtp->xVTKfld;
-      mtp->xVTKfld = 0;
-    }
- else
-     mtp->xVTKfld = new long int[ mtp->nVTKfld][2];
+ if(mtp->PvnVTK == S_OFF) {
+     if(mtp->xVTKfld) {
+         delete[] mtp->xVTKfld;
+         mtp->xVTKfld = nullptr;
+     }
+ }
+ else {
+     if(!mtp->xVTKfld) { // could be allocated in function setVTKfields
+         mtp->xVTKfld = new long int[mtp->nVTKfld][2];
+     }
+ }
 
  //- mtp->stld = new char[ mtp->nIV ][EQ_RKLEN];
  mtp->Tval  = new double[ mtp->nTai ];
