@@ -520,7 +520,6 @@ protected:
 
    GEMS3KGenerator GEMS3k_generator();
    void default_VTK(const std::string &work_path);
-   void math_transport_init();
    int gem3k_files_read(const std::string &ipm_lst_file, const std::string &dbr_lst_file);
    int restore_data_from_gems3k();
    int gems3k_strings(const std::string &dch_json, const std::string &ipm_json, const std::vector<std::string> &dbr_json);
@@ -574,8 +573,8 @@ protected:
    void setSIA(char flag)
    {
        switch(flag) {
-       case '+':
-       case '-':
+       case S_ON:
+       case S_OFF:
            mtp->PsSIA = flag;
            break;
        case '*':
@@ -588,19 +587,19 @@ protected:
    /// PsMO: Use non stop debug output for nodes (+ -) (default +)
    void setOutput(bool enable) {
        if(enable) {
-           mtp->PsMO = '+';
+           mtp->PsMO = S_ON;
        }
        else {
-           mtp->PsMO = '-';
+           mtp->PsMO = S_OFF;
        }
    }
    /// PsVTK: Use non stop debug output nodes to VTK format(+ -) (default -)
    void setOutVTK(bool enable) {
        if(enable) {
-           mtp->PsVTK = '+';
+           mtp->PsVTK = S_ON;
        }
        else {
-           mtp->PsVTK = '-';
+           mtp->PsVTK = S_OFF;
        }
    }
 
@@ -735,6 +734,35 @@ protected:
        mtp->cez = val;
    }
 
+   // (5) Initialize/change defaults for arrays
+
+   /// DiCp:  Change array of indexes of initial system variants for distributing to nodes [nC]
+   void setDistributing(long int node_ndx, long int sys_ndx)
+   {
+       if(mtp->DiCp && node_ndx>=0 && node_ndx<mtp->nC) {
+           mtp->DiCp[node_ndx][0] = sys_ndx;
+       }
+   }
+   /// DiCp: The second column DiCp[1] contains the node type for each node:
+   /// 0:   normal node;
+   /// Boundary condition nodes:
+   /// 1:   Dirichlet source (constant composition source);
+   /// -1:  Dirichlet sink;
+   /// 2:   Neumann source (constant gradient source);
+   /// -2:  Neumann sink;
+   /// 3:   Cauchy source (constant flux source);
+   /// -3:  Cauchy sink;
+   /// 4:   Input time-depended function (TBD).
+   void setNodeType(long int node_ndx, long int type)
+   {
+       if(mtp->DiCp && node_ndx>=0 && node_ndx<mtp->nC) {
+           mtp->DiCp[node_ndx][1] = type;
+       }
+   }
+
+   /// xFlds: Set list of selected fields and indexes to VTK format
+   void setVTfields(const std::vector<std::pair<int, int>>& vtk_fields);
+
    void defaults_DiCp();
    void defaults_HydP();
    void defaults_FDLi_FDLf();
@@ -787,3 +815,4 @@ typedef enum {  /// Field index into outField structure
 } GEM2MT_DYNAMIC_FIELDS;
 
 #endif //_m_gem2mt_h_
+

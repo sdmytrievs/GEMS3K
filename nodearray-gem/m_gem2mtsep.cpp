@@ -348,6 +348,7 @@ void TGEM2MT::math_transport_defaults()
     memset( &mtp->Msysb, 0, sizeof(double)*20 );
     memset( mtp->size[0], 0, sizeof(float)*8 );
 
+    mtp->nVTKfld = 0;
     mtp->Tau[START_] = 0.;
     mtp->Tau[STOP_] = 1000.;
     mtp->Tau[STEP_] = 1.;
@@ -362,14 +363,6 @@ void TGEM2MT::math_transport_defaults()
     // Alloc the NodeArray
     na = TNodeArray::create(mtp->nC);
     TNodeArray::na = na.get();
-}
-
-// Allocate math transport arrays
-void TGEM2MT::math_transport_init()
-{
-    // The NodeArray must be allocated here
-    //na = TNodeArray::create(mtp->nC);
-    //TNodeArray::na = na.get();
 }
 
 // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
@@ -456,7 +449,6 @@ int TGEM2MT::gems3k_strings(const std::string& dch_json, const std::string& ipm_
 
 int TGEM2MT::MassTransInit(const std::string &ipm_lst_file, const std::string &dbr_lst_file)
 {
-    //math_transport_init();
     if(gem3k_files_read(ipm_lst_file, dbr_lst_file)) {
         return 1;
     }
@@ -469,12 +461,33 @@ int TGEM2MT::MassTransInit(const std::string &ipm_lst_file, const std::string &d
 int TGEM2MT::MassTransStringInit(const std::string& dch_json, const std::string& ipm_json,
                                  const std::vector<std::string>& dbr_json)
 {
-    //math_transport_init();
     if(gems3k_strings(dch_json, ipm_json, dbr_json)) {
         return 1;
     }
     restore_data_from_gems3k();
     return 0;
+}
+
+void TGEM2MT::setVTfields(const std::vector<std::pair<int, int>> &vtk_fields)
+{
+    if(mtp->xVTKfld) {
+        delete[]  mtp->xVTKfld;
+        mtp->xVTKfld = nullptr;
+    }
+    mtp->nVTKfld = vtk_fields.size();
+    if(mtp->nVTKfld>0) {
+        mtp->xVTKfld = new long int[mtp->nVTKfld][2];
+        for(int ii=0; ii<mtp->nVTKfld; ++ii) {
+            mtp->xVTKfld[ii][0] =vtk_fields[ii].first;
+            mtp->xVTKfld[ii][1] =vtk_fields[ii].second;
+        }
+        mtp->PvnVTK = S_ON;
+        mtp->PsVTK = mtp->PvnVTK;
+    }
+    else {
+        mtp->PvnVTK = S_OFF;
+        mtp->PsVTK = mtp->PvnVTK;
+    }
 }
 
 //==========================================================================================
