@@ -65,7 +65,7 @@ class TParticleArray
 
     long int anParts;      // Number of allocated particles (in each array for T0 and T1) <= nNodes*nPmax
     long int anPTypes;     // Number of allocated particle types (< 20 ? )
-    long int anProps;      // Number of particle statistic properties (for monitoring) >= anPTypes
+    long int anProps1;      // Number of particle statistic properties (for monitoring) >= anPTypes
 
     TNodeArray* nodes; // Pointer to TNodeArray class
 

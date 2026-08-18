@@ -31,7 +31,7 @@ TParticleArray::TParticleArray( long int nPTypes, long int nProps,
            long int *anPmin, long int *anPmax,
            TNodeArray* aNodes ):
   ParT0(0), ParT1(0), anParts(0),
-  anPTypes(nPTypes), anProps(nProps), nodes(aNodes)
+  anPTypes(nPTypes), anProps1(nProps), nodes(aNodes)
 {
   long int ii;
   nNodes = nodes->nNodes();

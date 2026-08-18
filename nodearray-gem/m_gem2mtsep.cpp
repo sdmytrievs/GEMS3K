@@ -35,8 +35,6 @@ TGEM2MT::TGEM2MT(char ps_mode, long n_nodes)
 {
     mtp=&mt[0];
     set_def(0);
-    ////mtp->PvMO =   S_ON;
-    ////mtp->iStat =  AS_READY;
     na = 0;
     pa_mt = 0;
     mtp->PsMode = ps_mode;
@@ -58,6 +56,21 @@ TGEM2MT::~TGEM2MT()
 void TGEM2MT::RecCalc()
 {
     try {
+
+        // use particles
+        if(mtp->PsMode == RMT_MODE_W) {
+            na->SetGrid(mtp->sizeLc, mtp->grid);   // set up grid structure
+            pa_mt = new TParticleArray(mtp->nPTypes, mtp->nProps,
+                                       mtp->NPmean, mtp->ParTD, mtp->nPmin, mtp->nPmax, na.get());
+            pa_mt->setUpCounters();
+        }
+
+        // put HydP
+        if(mtp->PsMode != RMT_MODE_S && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
+            putHydP(na->pNodT0());
+            putHydP(na->pNodT1());
+        }
+
         if(mtp->PsVTK != S_OFF)  {
             u_create_directory(pathVTK+nameVTK+"/");
         }
@@ -270,6 +283,24 @@ void TGEM2MT::defaults_HydP()
     }
 }
 
+// Default  particle array setup
+void TGEM2MT::defaults_particle_setup()
+{
+    if(mtp->PsMode == RMT_MODE_W) {
+        for(int ii=0; ii< mtp->nPTypes; ++ii) {
+            mtp->NPmean[ii] = 500;
+            mtp->nPmin[ii] = 100;
+            mtp->nPmax[ii] = 1000;
+            mtp->ParTD[ii][0] = ii;
+            mtp->ParTD[ii][1] = MOBILE_C_MASS;
+            mtp->ParTD[ii][2] = DISSOLVED;
+            mtp->ParTD[ii][3] = 0;
+            mtp->ParTD[ii][4] = 0;
+            mtp->ParTD[ii][5] = 0;
+        }
+    }
+}
+
 // Default initialization FDLf, FDLi
 void TGEM2MT::defaults_FDLi_FDLf()
 {
@@ -363,6 +394,13 @@ void TGEM2MT::math_transport_defaults()
     // Alloc the NodeArray
     na = TNodeArray::create(mtp->nC);
     TNodeArray::na = na.get();
+
+    if(mtp->PsMode == RMT_MODE_W) {
+        mtp->nPTypes = 10;
+    }
+
+    mtp->PsMO =   S_ON;
+    mtp->iStat =  AS_READY;
 }
 
 // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
@@ -388,7 +426,7 @@ int TGEM2MT::gem3k_files_read(const std::string& ipm_lst_file, const std::string
 
 
 // Set up NodeArray and ParticleArray classes after reading gems3k files
-int TGEM2MT::restore_data_from_gems3k()
+int TGEM2MT::restore_data_from_gems3k(const std::vector<std::string>& dbr_names)
 {
     int ii;
     CalcIPM(NEED_GEM_AIA, 0, mtp->nC); //recalc all nodes ?
@@ -411,18 +449,15 @@ int TGEM2MT::restore_data_from_gems3k()
         mtp->Pval[ii] = na->pCSD()->Pval[ii]/bar_to_Pa;
     }
 
-    // use particles
-    if(mtp->PsMode == RMT_MODE_W) {
-        na->SetGrid(mtp->sizeLc, mtp->grid);   // set up grid structure
-        pa_mt = new TParticleArray(mtp->nPTypes, mtp->nProps,
-                                   mtp->NPmean, mtp->ParTD, mtp->nPmin, mtp->nPmax, na.get());
-        pa_mt->setUpCounters();
+    // read names
+    for(ii=0; ii<mtp->nIV; ++ii) {
+        std::string name = std::to_string(ii)+"_system";
+        if(ii<dbr_names.size()) {
+            name = std::to_string(ii)+dbr_names[ii];
+        }
+        strncpy(mtp->nam_i[ii], name.c_str(), MAXIDNAME );
     }
-    // put HydP
-    if(mtp->PsMode != RMT_MODE_S && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
-        putHydP(na->pNodT0());
-        putHydP(na->pNodT1());
-    }
+
     return 0;
 }
 
@@ -447,12 +482,18 @@ int TGEM2MT::gems3k_strings(const std::string& dch_json, const std::string& ipm_
     return 0;
 }
 
+
 int TGEM2MT::MassTransInit(const std::string &ipm_lst_file, const std::string &dbr_lst_file)
 {
     if(gem3k_files_read(ipm_lst_file, dbr_lst_file)) {
         return 1;
     }
-    restore_data_from_gems3k();
+
+    // get dbr file names
+    GEMS3KGenerator generator(ipm_lst_file);
+    mtp->nIV = generator.load_dbr_lst_file(dbr_lst_file);
+
+    restore_data_from_gems3k(generator.dbr_names());
     return 0;
 }
 
@@ -464,7 +505,9 @@ int TGEM2MT::MassTransStringInit(const std::string& dch_json, const std::string&
     if(gems3k_strings(dch_json, ipm_json, dbr_json)) {
         return 1;
     }
-    restore_data_from_gems3k();
+
+    mtp->nIV = dbr_json.size();
+    restore_data_from_gems3k({});
     return 0;
 }
 
@@ -490,13 +533,36 @@ void TGEM2MT::setVTKfields(const std::vector<std::pair<int, int>> &vtk_fields)
     }
 }
 
+void TGEM2MT::setParticle(long int pndx, long int pmean, long int pmin, long int pmax, const std::array<long int, 6> &pparam)
+{
+    if(mtp->PsMode == RMT_MODE_W && pndx<mtp->nPTypes) {
+            mtp->NPmean[pndx] = pmean;
+            mtp->nPmin[pndx] = pmin;
+            mtp->nPmax[pndx] = pmax;
+            std::copy(pparam.begin(), pparam.end(), mtp->ParTD[pndx]);
+    }
+}
+
+void TGEM2MT::setHydraulicParameters(long pndx, double Vt, double vp, double eps, double Km, double al, double Dif, double nto)
+{
+    if(mtp->HydP && pndx<mtp->nC) {
+        mtp->HydP[pndx][0] = Vt;
+        mtp->HydP[pndx][1] = vp;
+        mtp->HydP[pndx][2] = eps;
+        mtp->HydP[pndx][3] = Km;
+        mtp->HydP[pndx][4] = al;
+        mtp->HydP[pndx][5] = Dif;
+        mtp->HydP[pndx][6] = nto;
+    }
+}
+
 //==========================================================================================
 
 // free dynamic memory in objects and values
 void TGEM2MT::mem_kill(int q)
 {
     ErrorIf( mtp!=&mt[q], GetName(),
-             "E05GTrem: Attempt to access corrupted dynamic memory.");
+            "E05GTrem: Attempt to access corrupted dynamic memory.");
 
     //- if( mtp->lNam) delete[] mtp->lNam;
     //- if( mtp->lNamE) delete[] mtp->lNamE;
@@ -687,24 +753,23 @@ void TGEM2MT::mem_new(int q)
  else
      mtp->grid = new double[ mtp->nC][3];
 
- if( mtp->PsMode == RMT_MODE_W  )
- {
-   mtp->NPmean = new long int[ mtp->nPTypes];
-   mtp->nPmin = new long int[ mtp->nPTypes];
-   mtp->nPmax = new long int[ mtp->nPTypes];
-   mtp->ParTD = new long int[mtp->nPTypes][6];
- }
- else
- {
-  if(mtp->NPmean) delete[] mtp->NPmean;
-  if(mtp->nPmin) delete[] mtp->nPmin;
-  if(mtp->nPmax) delete[] mtp->nPmax;
-  if(mtp->ParTD) delete[] mtp->ParTD;
-  mtp->NPmean = 0;
-  mtp->nPmin = 0;
-  mtp->nPmax = 0;
-  mtp->ParTD = 0;
- }
+   if(mtp->PsMode == RMT_MODE_W) {
+       mtp->NPmean = new long int[ mtp->nPTypes];
+       mtp->nPmin = new long int[ mtp->nPTypes];
+       mtp->nPmax = new long int[ mtp->nPTypes];
+       mtp->ParTD = new long int[mtp->nPTypes][6];
+       defaults_particle_setup();
+   }
+   else {
+       if(mtp->NPmean) delete[] mtp->NPmean;
+       if(mtp->nPmin) delete[] mtp->nPmin;
+       if(mtp->nPmax) delete[] mtp->nPmax;
+       if(mtp->ParTD) delete[] mtp->ParTD;
+       mtp->NPmean = nullptr;
+       mtp->nPmin = nullptr;
+       mtp->nPmax = nullptr;
+       mtp->ParTD = nullptr;
+   }
  mtp->nam_i= new char[ mtp->nIV][ MAXIDNAME ];
  //- mtp->PTVm = new double[ mtp->nIV][5];
  if(!mtp->DiCp) { // could be allocated in constructor

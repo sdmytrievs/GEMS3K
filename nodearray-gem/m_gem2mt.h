@@ -521,7 +521,7 @@ protected:
    GEMS3KGenerator GEMS3k_generator();
    void default_VTK(const std::string &work_path);
    int gem3k_files_read(const std::string &ipm_lst_file, const std::string &dbr_lst_file);
-   int restore_data_from_gems3k();
+   int restore_data_from_gems3k(const std::vector<std::string>& dbr_names);
    int gems3k_strings(const std::string &dch_json, const std::string &ipm_json, const std::vector<std::string> &dbr_json);
 
    /// Get the full name of this GEM2MT task
@@ -577,9 +577,9 @@ protected:
        case S_OFF:
            mtp->PsSIA = flag;
            break;
-       case '*':
+       case S_REM:
        default:
-           mtp->PsSIA = '*';
+           mtp->PsSIA = S_REM;
            break;
        }
    }
@@ -620,6 +620,12 @@ protected:
    }
 
    // (3) Dimensions for gem2mt (memory allocation)
+   /// nPTypes:  Number of allocated particle types < 20
+   void setNumberParticles(long int num)
+   {
+       mtp->nPTypes = num;
+   }
+
    /// Tau:   Physical time iterator (start,end,step)
    void setTau(double start, double end, double step)
    {
@@ -760,13 +766,33 @@ protected:
        }
    }
 
+   /// Set of particle statistic property [nPTypes]
+   /// @param pndx: index in array
+   /// @param NPmean: Array of initial mean particle type numbers per node
+   /// @param nPmin: Minimum average total number of particles of each type per one node
+   /// @param nPmax: Maximum average total number of particles of each type per one node
+   /// @param ParTD: Array of particle type definitions at t0 or after interruption
+   void setParticle(long int pndx, long int pmean, long int pmin, long int pmax, const std::array<long int, 6>& pparam);
+
+   /// HydP:  Initial hydraulic parameters in nodes: Vt, vp, eps, Km, al, Dif,  nto
+   /// @param pndx: index in array
+   /// @param Vt: initial total volume of the node, m3 (for porosity)
+   /// @param vp: initial advection velocity, m/s
+   /// @param eps: initial effective porosity
+   /// @param Km: initial effective permeability
+   /// @param al: initial specific longitudinal dispersivity
+   /// @param Dif: initial general diffusivity
+   /// @param nto: initial tortuosity factor
+   void setHydraulicParameters(long int pndx, double Vt, double vp, double eps, double Km, double al, double Dif, double nto);
+
    /// xFlds: Set list of selected fields and indexes to VTK format
    void setVTKfields(const std::vector<std::pair<int, int>>& vtk_fields);
 
+   void math_transport_defaults();
    void defaults_DiCp();
    void defaults_HydP();
    void defaults_FDLi_FDLf();
-   void math_transport_defaults();
+   void defaults_particle_setup();
 };
 
 enum gem2mt_inernal {
@@ -815,4 +841,3 @@ typedef enum {  /// Field index into outField structure
 } GEM2MT_DYNAMIC_FIELDS;
 
 #endif //_m_gem2mt_h_
-
