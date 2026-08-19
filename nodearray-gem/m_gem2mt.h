@@ -620,8 +620,55 @@ protected:
    }
 
    // (3) Dimensions for gem2mt (memory allocation)
+
+   /// nC:  Input number of local equilibrium cells (nodes)
+   long int nNodes() const
+   {
+       return mtp->nC;
+   }
+   /// nMGP: Number of mobile groups of phases, nMGP >= 0
+   long int nPhaseGroups() const
+   {
+       return mtp->nPG;
+   }
+   /// nFD: Number of MGP fluxes defined in the megasystem, nFD >= 0
+   long int nMGPfluxes() const
+   {
+       return mtp->nFD;
+   }
+   /// nSFD:  Number of IC source flux compositions defined in megasystem, nSFD >= 0
+   long int nICsourceFluxes() const
+   {
+       return mtp->nSFD;
+   }
+   /// FIf:  Number of phases in (DATABR) for setting box-fluxes
+   long int nPhases() const
+   {
+       return mtp->FIf;
+   }
+
    /// nPTypes:  Number of allocated particle types < 20
-   void setNumberParticles(long int num)
+   long int nParticleTypes()
+   {
+       return mtp->nPTypes;
+   }
+
+   /// nMGP:  Number of mobile groups of phases, nMGP >= 0
+   void setNumberPhaseGroups(long int num)
+   {
+       mtp->nPG = num;
+       mtp->PvPGD = S_ON;
+   }
+
+   /// nFD: Number of MGP fluxes defined in the megasystem, nFD >= 0
+   void setNumberMGPfluxes(long int num)
+   {
+       mtp->nFD = num;
+       mtp->PvFDL = S_ON;
+   }
+
+   /// nPTypes:  Number of allocated particle types < 20
+   void setNumberParticleTypes(long int num)
    {
        mtp->nPTypes = num;
    }
@@ -741,7 +788,6 @@ protected:
    }
 
    // (5) Initialize/change defaults for arrays
-
    /// DiCp:  Change array of indexes of initial system variants for distributing to nodes [nC]
    void setDistributing(long int node_ndx, long int sys_ndx)
    {
@@ -785,6 +831,27 @@ protected:
    /// @param nto: initial tortuosity factor
    void setHydraulicParameters(long int pndx, double Vt, double vp, double eps, double Km, double al, double Dif, double nto);
 
+   // Use phase groups definitions
+   /// MGPid: ID list of mobile phase groups
+   void setPhaseGroupsID(long int  pndx, const std::string& ids);
+   /// UMGP: [nFi] units for setting phase quantities in MGP (see PGT )
+   void setUnitsPhaseQuantities(long int  pndx, char units);
+   /// PGT: Quantities of phases in MGP [Fi][nPG]
+   /// @param gndx: phase groups index
+   /// @param pndx: phase index
+   void setPhaseGroupsQuantities(long int gndx, long int pndx, double quantity);
+
+   /// FDLi: Set Source/Receive box index in the flux definition
+   void setFluxSourceReceive(long int  pndx, long int  source, long int  receive);
+
+   /// FDLf: Set the flux defnition: flux order, flux rate, MGP quantity
+   void setFluxSourceReceive(long int  pndx, double order, double rate, double quantity, double val);
+
+   /// FDLmp: [nFD] ID of MGP to move in this flux
+   void setFluxMGPid(long int  pndx, const std::string& ids);
+   /// FDLid: Set IDs of fluxes
+   void setFluxIDs(long int  pndx, const std::string& ids);
+
    /// xFlds: Set list of selected fields and indexes to VTK format
    void setVTKfields(const std::vector<std::pair<int, int>>& vtk_fields);
 
@@ -793,6 +860,7 @@ protected:
    void defaults_HydP();
    void defaults_FDLi_FDLf();
    void defaults_particle_setup();
+   void defaults_MGPid_PGT_FDLmp_FDLid(bool mode);
 };
 
 enum gem2mt_inernal {
@@ -841,3 +909,5 @@ typedef enum {  /// Field index into outField structure
 } GEM2MT_DYNAMIC_FIELDS;
 
 #endif //_m_gem2mt_h_
+
+

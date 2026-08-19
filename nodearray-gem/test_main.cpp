@@ -18,6 +18,7 @@ static int task_from_file(const std::string& gem2mt_file, const std::string& ipm
 static int task_A(const std::string& ipm_lst, const std::string& dbr_lst);
 static int task_C(const std::string& ipm_lst, const std::string& dbr_lst);
 static int task_W(const std::string& ipm_lst, const std::string& dbr_lst);
+static int task_F(const std::string& ipm_lst, const std::string& dbr_lst);
 
 //---------------------------------------------------------------------------
 // Test of 1D advection (finite difference method provided by Dr. F.Enzmann,
@@ -58,7 +59,8 @@ int main( int argc, char* argv[] )
         //return task_from_file(gem2mt_in1, ipm_lst, dbr_lst);
         //return task_A(ipm_lst, dbr_lst);
         //return task_C(ipm_lst, dbr_lst);
-        return task_W(ipm_lst, dbr_lst);
+        //return task_W(ipm_lst, dbr_lst);
+        return task_F("TestF/CalcColumn-dat.lst", "TestF/CalcColumn-dbr.lst");
     }
     catch(TError& err) {
         TNode::ipmlog_file->error("Error {} : {}", err.title, err.mess);
@@ -271,7 +273,7 @@ int task_W(const std::string& ipm_lst, const std::string& dbr_lst)
     mt_task->setOutput(true);
 
     // Set number of allocated particle types < 20
-    mt_task->setNumberParticles(1);
+    mt_task->setNumberParticleTypes(1);
     // Set physical time iterator (start,end,step)
     mt_task->setTau(0, 1000000, 1000);
     // Set spatial dimensions of the medium defines topology of nodes ( x y z )
@@ -334,6 +336,98 @@ int task_W(const std::string& ipm_lst, const std::string& dbr_lst)
     return 0;
 }
 
+
+//  CalDolCol2:G:CalcColumn:0:0:1:25:0:Test2:F:
+int task_F(const std::string& ipm_lst, const std::string& dbr_lst)
+{
+    if(ipm_lst.empty() || dbr_lst.empty()) {
+        Error( "Start task", "No inital files");
+    }
+
+    // The NodeArray must be allocated here
+    std::shared_ptr<TGEM2MT> mt_task( new TGEM2MT('F', 51) );
+    TGEM2MT::pm = mt_task.get();
+
+    // Set up sizes, flags and values different from default
+    mt_task->setName("Test F mode (flow-through reactors)");
+    mt_task->setComment("@");
+
+    // Use smart initial approximation in GEM IPM (+); SIA internal (*); AIA (-)
+    mt_task->setSIA(S_OFF);
+    // Set type flux Phase ( 0 undef, 1 - aq; 2 - gas; 3 - aq+gas, 4 - solids ) (default 1)
+    mt_task->setTypeFluxPhase('1');
+    // Use non stop debug output for nodes (+ -) (default +)
+    mt_task->setOutput(true);
+
+    // Set number of mobile groups of phases, nMGP >= 0
+    mt_task->setNumberPhaseGroups(1);
+    // Set number of MGP fluxes defined in the megasystem, nFD >= 0
+    mt_task->setNumberMGPfluxes(51);
+
+    // Set physical time iterator (start,end,step)
+    mt_task->setTau(0, 1200, 100);
+    // Set spatial dimensions of the medium defines topology of nodes ( x y z )
+    mt_task->setSpatialDimensions(0, 0, 0);
+
+    // Set  M(H2O) (mass of water-solvent for molalities)
+    mt_task->setMassofWaterSolvent(1.);
+    // Set Maq (mass of aqueous solution for ppm etc.)
+    mt_task->setMassofAqueousSolution(1.);
+    // Set Vaq (volume of aqueous solution for molarities)
+    mt_task->setVolumeofAqueousSolution(1.);
+    // ?? only to compare Set initial node effective porosity (0 < eps < 1), usually 1
+    mt_task->setInitialNodeEffectivePorosity(1e-9);
+    // ?? only to compare Set initial effective permeability, m2, usually 1
+    mt_task->setInitialEffectivePermeability(1e-12);
+    // Set cutoff for IC amount differences in the node between time steps (mol), usually 1e-9
+    mt_task->setCutofffICamount(0);
+    // Set  cutoff for minimal amounts of IC in node bulk compositions (mol), usually 1e-12
+    mt_task->setCutoffMinimalAmountsIC(0);
+
+    // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS,
+    // allocate and set default values for gem2mt arrays
+    if(TGEM2MT::pm->MassTransInit(ipm_lst, dbr_lst)) {
+        return 1;  // error reading files
+    }
+
+    // Change/define some other gem2mt arrays
+
+    for(long int ii=0; ii<mt_task->nPhaseGroups(); ++ii) {
+        // Set ID of mobile phase group
+        mt_task->setPhaseGroupsID(ii, "phg"+std::to_string(ii+1));
+        for(long int k=0; k<mt_task->nPhases(); ++k) {
+            // Set quantities of phases in MGP
+            mt_task->setPhaseGroupsQuantities(ii, k, (k==0 ? 1.: 0.));
+        }
+    }
+    for(long int k=0; k<mt_task->nPhases(); ++k) {
+        // Set units for setting phase quantities in MGP (see PGT )
+        mt_task->setUnitsPhaseQuantities(k, 'M');
+    }
+
+
+    for(long int ii=0; ii<mt_task->nMGPfluxes(); ++ii) {
+        // Set Source/Receive box index in the flux definition
+        mt_task->setFluxSourceReceive(ii, ii, (ii<mt_task->nMGPfluxes()-1 ? ii+1: -1));
+        // Set the flux defnition: flux order, flux rate, MGP quantity
+        mt_task->setFluxSourceReceive(ii, 1., 0.5, 0, 0);
+        //  Set the ID of MGP to move in this flux
+        mt_task->setFluxMGPid(ii, "phg1");
+        //  Set IDs of fluxes
+        mt_task->setFluxIDs(ii, "qj");
+     }
+
+    // Set list of selected fields and indexes to VTK format
+    mt_task->setVTKfields({{41,2},{41,6},{41,25},{41,26},{41,17},{41,13}});
+    mt_task->setOutVTK(false);  // allocated but no write
+
+    TGEM2MT::pm->WriteTask("gem2mt_out.dat");
+
+    // here we call the mass-transport finite-difference coupled routine
+    TGEM2MT::pm->RecCalc();
+
+    return 0;
+}
 
 //---------------------------------------------------------------------------
 

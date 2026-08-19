@@ -301,11 +301,80 @@ void TGEM2MT::defaults_particle_setup()
     }
 }
 
+// Default initialization MGPid, PGT, FDLmp, FDLid
+void TGEM2MT::defaults_MGPid_PGT_FDLmp_FDLid(bool mode)
+{
+    long int ii;
+    std::string phName = "Pg1";
+    double xaq= 0.;
+    double xgas = 0.;
+    double xsld = 0.;
+
+    switch(mtp->PsMPh)  {
+    case MGP_TT_AQGF: phName = "flu"; xgas = 1.; xaq = 1.;    // '3'
+        break;
+    case MGP_TT_AQS: phName = "aq"; xaq = 1.;                 // '1'
+        break;
+    case MGP_TT_GASF: phName = "gas"; xgas = 1.;              // '2'
+        break;
+    case MGP_TT_SOLID: phName = "sld"; xsld = 1.;             // '4'
+        break;
+    default: break;
+    }
+    if(mtp->nPG>0 && !(!*mtp->MGPid[0] || *mtp->MGPid[0] == ' ')) {
+        phName = char_array_to_string(mtp->MGPid[0], MAXSYMB);
+        strip(phName);
+    }
+
+    if(mode) {  // only start
+        for(ii=0; ii<mtp->nPG; ++ii) {
+            if(!*mtp->MGPid[ii] || *mtp->MGPid[ii] == ' ' || *mtp->MGPid[ii] == '`') {
+                strncpy(mtp->MGPid[ii], phName.c_str(), MAXSYMB );
+            }
+            for(long int k=0; k<mtp->FIf; ++k) {
+                char PHC_ = na->pCSD()->ccPH[k];
+
+                if(PHC_ == PH_AQUEL) {
+                    mtp->PGT[ii*mtp->FIf+k] = xaq;
+                }
+                else {
+                    if(PHC_ == PH_GASMIX || PHC_ == PH_FLUID || PHC_ == PH_PLASMA) {
+                        mtp->PGT[ii*mtp->FIf+k] = xgas;
+                    }
+                    else {
+                        mtp->PGT[ii*mtp->FIf+k] = xsld;
+                    }
+                }
+            }
+        }
+    }
+
+    if(mtp->UMGP) {
+        for(ii=0; ii<mtp->FIf; ++ii) {
+            if(!mtp->UMGP[ii] || mtp->UMGP[ii] == ' '|| mtp->UMGP[ii] == '`') {
+                mtp->UMGP[ii] = QUAN_MOL;
+            }
+        }
+    }
+
+    if(mtp->PvFDL != S_OFF) {
+        for(ii=0; ii<mtp->nFD; ++ii) {
+            if(!*mtp->FDLmp[ii] || *mtp->FDLmp[ii] == ' ' || *mtp->FDLmp[ii] == '`') {
+                strncpy( mtp->FDLmp[ii], phName.c_str(), MAXSYMB );
+            }
+            if(!*mtp->FDLid[ii] || *mtp->FDLid[ii] == ' ') {
+                strncpy( mtp->FDLid[ii], "qj", MAXSYMB );
+            }
+        }
+    }
+
+}
+
 // Default initialization FDLf, FDLi
 void TGEM2MT::defaults_FDLi_FDLf()
 {
      // generate fluxes arrays
-    if( mtp->PvFDL == S_OFF /*(nFD > 0) & (qf < nFD)*/)  {
+    if(mtp->PvFDL != S_OFF /*(nFD > 0) & (qf < nFD)*/)  {
         for(long int ii=0; ii< mtp->nFD; ++ii) {
             mtp->jt = std::min(ii, mtp->nC-1);
             mtp->qc = std::min(ii, mtp->nC-1);  // index of node
@@ -372,7 +441,7 @@ void TGEM2MT::defaults_FDLi_FDLf()
     }
 }
 
-// Allocate math transport arrays
+// Set up math transport default values7sizes in constructor
 void TGEM2MT::math_transport_defaults()
 {
     // from set_def(int q), ask gem2mt users for better defaults
@@ -386,6 +455,12 @@ void TGEM2MT::math_transport_defaults()
     mtp->ntM =1000;
     mtp->cdv = 1e-9;
     mtp->cez = 1e-12;
+
+    mtp->Msysb = 0.;
+    mtp->Vsysb = 0.;
+    mtp->Mwatb = 1.;
+    mtp->Maqb = 1.;
+    mtp->Vaqb = 1.;
 
     // Alloc important arrays
     mtp->DiCp = new long int[ mtp->nC][2];
@@ -401,6 +476,30 @@ void TGEM2MT::math_transport_defaults()
 
     mtp->PsMO =   S_ON;
     mtp->iStat =  AS_READY;
+}
+
+// Set up default values to arrays after allocation
+void TGEM2MT::init_arrays(bool mode)
+{
+    // setup flags and counters
+    mtp->gStat = GS_INDEF;
+    mtp->iStat = GS_INDEF;
+    mt_reset();
+
+    if(mode)  {
+        for(long int ii=0; ii<mtp->nIV; ++ii) {
+            std::string sname = "System"+std::to_string(ii);
+            strncpy( mtp->nam_i[ii], sname.c_str(), MAXIDNAME );
+        }
+
+        if(mtp->PsMode == RMT_MODE_W) {
+            defaults_particle_setup();
+        }
+    }
+
+    if(mtp->PsMode == RMT_MODE_S || mtp->PsMode == RMT_MODE_F || mtp->PsMode == RMT_MODE_B) {
+        defaults_MGPid_PGT_FDLmp_FDLid(mode);
+    }
 }
 
 // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
@@ -431,31 +530,39 @@ int TGEM2MT::restore_data_from_gems3k(const std::vector<std::string>& dbr_names)
     int ii;
     CalcIPM(NEED_GEM_AIA, 0, mtp->nC); //recalc all nodes ?
 
-    // Restore sizes from gem3k arrays
-    mtp->Lsf = na->pCSD()->nDCs;
-    mtp->Nf = na->pCSD()->nIC;
-    mtp->FIf = na->pCSD()->nPH;
-    mtp->nTai = na->pCSD()->nTp;
-    mtp->nPai = na->pCSD()->nPp;
+    // realloc gem2mt memory  (if not read exported gem2mt)
+    if(true) {
 
-    // realloc gem2mt memory
-    mem_new(0);
-    defaults_HydP();
+        // Restore sizes from gems3k export
+        mtp->Lsf = na->pCSD()->nDCs;
+        mtp->Nf = na->pCSD()->nIC;
+        mtp->FIf = na->pCSD()->nPH;
+        mtp->nTai = na->pCSD()->nTp;
+        mtp->nPai = na->pCSD()->nPp;
+
+        // allocate memory and setup default values
+        mem_new(0);
+        init_arrays(true);
+        if(mtp->HydP) {
+            defaults_HydP();
+        }
+        defaults_FDLi_FDLf();
+
+        // read names
+        std::string name;
+        for(ii=0; ii<mtp->nIV; ++ii) {
+            if(ii<dbr_names.size()) {
+                name = std::to_string(ii)+dbr_names[ii];
+                strncpy(mtp->nam_i[ii], name.c_str(), MAXIDNAME);
+            }
+        }
+    }
 
     for(ii=0; ii<mtp->nTai; ++ii) {
         mtp->Tval[ii] = na->pCSD()->TKval[ii]-C_to_K;
     }
     for(ii=0; ii<mtp->nPai; ++ii) {
         mtp->Pval[ii] = na->pCSD()->Pval[ii]/bar_to_Pa;
-    }
-
-    // read names
-    for(ii=0; ii<mtp->nIV; ++ii) {
-        std::string name = std::to_string(ii)+"_system";
-        if(ii<dbr_names.size()) {
-            name = std::to_string(ii)+dbr_names[ii];
-        }
-        strncpy(mtp->nam_i[ii], name.c_str(), MAXIDNAME );
     }
 
     return 0;
@@ -553,6 +660,59 @@ void TGEM2MT::setHydraulicParameters(long pndx, double Vt, double vp, double eps
         mtp->HydP[pndx][4] = al;
         mtp->HydP[pndx][5] = Dif;
         mtp->HydP[pndx][6] = nto;
+    }
+}
+
+void TGEM2MT::setPhaseGroupsID(long pndx, const std::string &ids)
+{
+    if(mtp->MGPid && pndx<mtp->nPG) {
+        strncpy( mtp->MGPid[pndx], ids.c_str(), MAXSYMB);
+    }
+}
+
+void TGEM2MT::setUnitsPhaseQuantities(long pndx, char units)
+{
+    if(mtp->UMGP && pndx<mtp->FIf) {
+        mtp->UMGP[pndx] = units;
+    }
+}
+
+void TGEM2MT::setPhaseGroupsQuantities(long gndx, long pndx, double quantity)
+{
+    if(mtp->MGPid && gndx<mtp->nPG && pndx<mtp->FIf) {
+        mtp->PGT[gndx*mtp->FIf+pndx] = quantity;
+    }
+}
+
+void TGEM2MT::setFluxSourceReceive(long pndx, double order, double rate, double quantity, double val)
+{
+    if(mtp->FDLf && pndx<mtp->nFD) {
+        mtp->FDLf[pndx][0] = order;
+        mtp->FDLf[pndx][1] = rate;
+        mtp->FDLf[pndx][2] = quantity;
+        mtp->FDLf[pndx][3] = val;
+    }
+}
+
+void TGEM2MT::setFluxMGPid(long pndx, const std::string &ids)
+{
+    if(mtp->FDLmp && pndx<mtp->nFD) {
+        strncpy( mtp->FDLmp[pndx], ids.c_str(), MAXSYMB);
+    }
+}
+
+void TGEM2MT::setFluxIDs(long pndx, const std::string &ids)
+{
+    if(mtp->FDLid && pndx<mtp->nFD) {
+        strncpy( mtp->FDLid[pndx], ids.c_str(), MAXSYMB);
+    }
+}
+
+void TGEM2MT::setFluxSourceReceive(long pndx, long source, long receive)
+{
+    if(mtp->FDLi && pndx<mtp->nFD) {
+        mtp->FDLi[pndx][0] = source;
+        mtp->FDLi[pndx][1] = receive;
     }
 }
 
@@ -758,7 +918,6 @@ void TGEM2MT::mem_new(int q)
        mtp->nPmin = new long int[ mtp->nPTypes];
        mtp->nPmax = new long int[ mtp->nPTypes];
        mtp->ParTD = new long int[mtp->nPTypes][6];
-       defaults_particle_setup();
    }
    else {
        if(mtp->NPmean) delete[] mtp->NPmean;
@@ -770,7 +929,8 @@ void TGEM2MT::mem_new(int q)
        mtp->nPmax = nullptr;
        mtp->ParTD = nullptr;
    }
- mtp->nam_i= new char[ mtp->nIV][ MAXIDNAME ];
+
+ mtp->nam_i= new char[mtp->nIV][ MAXIDNAME ];
  //- mtp->PTVm = new double[ mtp->nIV][5];
  if(!mtp->DiCp) { // could be allocated in constructor
      mtp->DiCp = new long int[ mtp->nC][2];
@@ -795,12 +955,13 @@ void TGEM2MT::mem_new(int q)
  //- mtp->Bn = new double[ mtp->nIV][ mtp->Nb ];
  //- mtp->SBM = new char [ mtp->Nb][MAXICNAME+MAXSYMB];
 
- if( mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B )
-      mtp->HydP = new double[ mtp->nC][SIZE_HYDP];
- else
-    { if(mtp->HydP) delete[] mtp->HydP;
-      mtp->HydP = 0;
-    }
+ if(mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
+     mtp->HydP = new double[mtp->nC][SIZE_HYDP];
+ }
+ else {
+     if(mtp->HydP) delete[] mtp->HydP;
+     mtp->HydP = nullptr;
+ }
 
  //-if( mtp->PvICi == S_OFF )
  //-   {
@@ -835,44 +996,52 @@ void TGEM2MT::mem_new(int q)
  //-      mtp->An = new double[ mtp->Lbi][ mtp->Nb ];
  //-   }
 
- if( mtp->PvFDL == S_OFF )
-   {
-     if(mtp->FDLi) delete[] mtp->FDLi;
-     if(mtp->FDLf) delete[] mtp->FDLf;
-     if(mtp->FDLid) delete[] mtp->FDLid;
-     if(mtp->FDLop) delete[] mtp->FDLop;
-     if(mtp->FDLmp) delete[] mtp->FDLmp;
-     mtp->FDLi = 0;
-     mtp->FDLf = 0;
-     mtp->FDLid = 0;
-     mtp->FDLop = 0;
-     mtp->FDLmp = 0;
-     mtp->nFD = 0;
+    if(mtp->PvFDL == S_OFF) {
+        if(mtp->FDLi) delete[] mtp->FDLi;
+        if(mtp->FDLf) delete[] mtp->FDLf;
+        if(mtp->FDLid) delete[] mtp->FDLid;
+        if(mtp->FDLop) delete[] mtp->FDLop;
+        if(mtp->FDLmp) delete[] mtp->FDLmp;
+        mtp->FDLi = nullptr;
+        mtp->FDLf = nullptr;
+        mtp->FDLid = nullptr;
+        mtp->FDLop = nullptr;
+        mtp->FDLmp = nullptr;
+        mtp->nFD = 0;
+    }
+    else  {
+        mtp->FDLi = new long int[ mtp->nFD][2];
+        mtp->FDLf = new double[ mtp->nFD][4];
+        mtp->FDLid= new char[ mtp->nFD][MAXSYMB];
+        mtp->FDLop= new char[ mtp->nFD][MAXSYMB];
+        mtp->FDLmp = new char[ mtp->nFD][MAXSYMB];
+        for(long int ii=0; ii<mtp->nFD; ++ii) {
+            fillValue(mtp->FDLid[ii], '\0', MAXSYMB);
+            fillValue(mtp->FDLop[ii], '\0', MAXSYMB);
+            fillValue(mtp->FDLmp[ii], '\0', MAXSYMB);
+        }
+    }
+
+  if(mtp->PvPGD == S_OFF) {
+      if(mtp->PGT) delete[] mtp->PGT;
+      if(mtp->MGPid) delete[] mtp->MGPid;
+      if(mtp->UMGP) delete[] mtp->UMGP;
+      mtp->PGT = nullptr;
+      mtp->MGPid = nullptr;
+      mtp->UMGP = nullptr;
+      mtp->nPG = 0;
   }
-   else
-   {
-      mtp->FDLi = new long int[ mtp->nFD][2];
-      mtp->FDLf = new double[ mtp->nFD][4];
-      mtp->FDLid= new char[ mtp->nFD][MAXSYMB];
-      mtp->FDLop= new char[ mtp->nFD][MAXSYMB];
-      mtp->FDLmp = new char[ mtp->nFD][MAXSYMB];
-   }
- if( mtp->PvPGD == S_OFF )
-   {
-     if(mtp->PGT) delete[] mtp->PGT;
-     if(mtp->MGPid) delete[] mtp->MGPid;
-     if(mtp->UMGP) delete[] mtp->UMGP;
-     mtp->PGT = 0;
-     mtp->MGPid = 0;
-     mtp->UMGP = 0;
-     mtp->nPG = 0;
-   }
-   else
-   {
-     mtp->PGT  =  new double[ mtp->FIf*mtp->nPG ];
-     mtp->MGPid = new char[ mtp->nPG ][ MAXSYMB ];
-     mtp->UMGP = new char[ mtp->FIf ];
-   }
+  else  {
+      mtp->PGT  =  new double[ mtp->FIf*mtp->nPG ];
+      mtp->MGPid = new char[ mtp->nPG ][MAXSYMB];
+      mtp->UMGP = new char[ mtp->FIf ];
+      for(long int ii=0; ii<mtp->nPG; ++ii) {
+          fillValue(mtp->MGPid[ii], '\0', MAXSYMB);
+      }
+      for(long int ii=0; ii<mtp->FIf; ++ii) {
+          mtp->UMGP[ii] = ' ';
+      }
+  }
 
  if( mtp->PvSFL == S_OFF )
   { if(mtp->BSF) delete[] mtp->BSF;
@@ -880,18 +1049,17 @@ void TGEM2MT::mem_new(int q)
   }
    else
       mtp->BSF = new double[ mtp->nSFD*mtp->Nf ];
- if( mtp->PvPGD != S_OFF && mtp->PvFDL != S_OFF )
-   {
+
+  if(mtp->PvPGD != S_OFF && mtp->PvFDL != S_OFF) {
       mtp->MB =  new double[mtp->nC*mtp->Nf];
       mtp->dMB = new double[mtp->nC*mtp->Nf];
-   }
-   else
-   {
-     if(mtp->MB) delete[] mtp->MB;
-     if(mtp->dMB) delete[] mtp->dMB;
-      mtp->MB = 0;
-      mtp->dMB = 0;
-   }
+  }
+  else {
+      if(mtp->MB) delete[] mtp->MB;
+      if(mtp->dMB) delete[] mtp->dMB;
+      mtp->MB = nullptr;
+      mtp->dMB = nullptr;
+  }
    if( mtp->PvDDc == S_OFF )
    {
      if(mtp->DDc) delete[] mtp->DDc;

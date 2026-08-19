@@ -615,11 +615,11 @@ void TGEM2MT::to_text_file( TIO& out_format, bool with_comments, bool brief_mode
     if( mtp->PvSFL == S_ON )
         prar.writeArray(  f__BSF, mtp->BSF,  mtp->nSFD*mtp->Nf, mtp->Nf,_comment, brief_mode);
 
-    if( mtp->PvPGD != S_OFF && mtp->PvFDL != S_OFF )
-    {
-        prar.writeArray(  f__MB, mtp->MB,  mtp->nC*mtp->Nf, mtp->Nf,_comment, brief_mode);
-        prar.writeArray(  f__dMB, mtp->dMB, mtp->nC*mtp->Nf,mtp->Nf,_comment, brief_mode);
-    }
+    // if( mtp->PvPGD != S_OFF && mtp->PvFDL != S_OFF ) // internal work data
+    // {
+    //     prar.writeArray(  f__MB, mtp->MB,  mtp->nC*mtp->Nf, mtp->Nf,_comment, brief_mode);
+    //     prar.writeArray(  f__dMB, mtp->dMB, mtp->nC*mtp->Nf,mtp->Nf,_comment, brief_mode);
+    // }
 
     if( mtp->PvnVTK == S_ON )
         prar.writeArray(  f__xFlds, &mtp->xVTKfld[0][0],  mtp->nVTKfld*2, 2L,_comment, brief_mode);
@@ -641,9 +641,6 @@ void TGEM2MT::to_text_file( TIO& out_format, bool with_comments, bool brief_mode
         prar.writeArrayF(  f_SDref, mtp->sdref[0],mtp->Nsd, V_SD_RKLEN,_comment, brief_mode);
         prar.writeArrayF(  f__SDval, mtp->sdval[0],mtp->Nsd, V_SD_RKLEN,_comment, brief_mode);
     }
-
-    //!!!mtp->Tval  = new double[ mtp->nTai ];  // from DataCH
-    //!!!mtp->Pval  = new double[ mtp->nPai ];
 
     out_format.dump( _comment );
 }
