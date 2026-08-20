@@ -154,15 +154,15 @@ nRes3,  //   reserved
 
   double
   // Input for compositions of initial systems
-   Msysb, // Masses (kg) and volumes (L) for initial systems: Ms (total mass, normalize)
-   Vsysb, // Vs (total volume of the object, for volume concentrations)
-   Mwatb, // M(H2O) (mass of water-solvent for molalities)
-   Maqb,  // Maq (mass of aqueous solution for ppm etc.)
-   Vaqb,  // Vaq (volume of aqueous solution for molarities)
-   Pgb,   // Pg (pressure in gas, for partial pressures)
-   Tmolb, // MOL total mole amount for basis sub-system composition calculations
-   WmCb,  // mole fraction of the carrier DC (e.g. sorbent or solvent)
-   Asur,  // Specific surface area of the sorbent (for adsorbed species)
+   Msysb1, // Masses (kg) and volumes (L) for initial systems: Ms (total mass, normalize)
+   Vsysb1, // Vs (total volume of the object, for volume concentrations)
+   Mwatb1, // M(H2O) (mass of water-solvent for molalities)
+   Maqb1,  // Maq (mass of aqueous solution for ppm etc.)
+   Vaqb1,  // Vaq (volume of aqueous solution for molarities)
+   Pgb1,   // Pg (pressure in gas, for partial pressures)
+   Tmolb1, // MOL total mole amount for basis sub-system composition calculations
+   WmCb1,  // mole fraction of the carrier DC (e.g. sorbent or solvent)
+   Asur1,  // Specific surface area of the sorbent (for adsorbed species)
 // "ADpar" data object (11 doubles)
    tf,     // time step reduction factor (usually 1)
    vol_in, // initial total node volume (m3),  was column length (m)  -> to sizeLc[0]
@@ -691,51 +691,6 @@ protected:
 
 
    // (4) Input for compositions of initial systems
-   /// InpSys: Masses (kg) (total mass, normalize)
-   void setTotlMass(double val)
-   {
-       mtp->Msysb = val;
-   }
-   /// Vsysb:  Vs (total volume of the object, for volume concentrations)
-   void setTotalVolume(double val)
-   {
-       mtp->Vsysb = val;
-   }
-   /// Mwatb:  M(H2O) (mass of water-solvent for molalities)
-   void setMassofWaterSolvent(double val)
-   {
-       mtp->Mwatb = val;
-   }
-   /// Maqb:   Maq (mass of aqueous solution for ppm etc.)
-   void setMassofAqueousSolution(double val)
-   {
-       mtp->Maqb = val;
-   }
-   /// Vaqb:   Vaq (volume of aqueous solution for molarities)
-   void setVolumeofAqueousSolution(double val)
-   {
-       mtp->Vaqb = val;
-   }
-   /// Pgb:   Pg (pressure in gas, for partial pressures)
-   void setPressureinGas(double val)
-   {
-       mtp->Pgb = val;
-   }
-   /// Tmolb:  MOL total mole amount for basis sub-system composition calculations
-   void setTotalMoleAmount(double val)
-   {
-       mtp->Tmolb = val;
-   }
-   /// WmCb:  mole fraction of the carrier DC (e.g. sorbent or solvent)
-   void setMoleFraction(double val)
-   {
-       mtp->Tmolb = val;
-   }
-   /// TauAsur:  Specific surface area of the sorbent (for adsorbed species)
-   void setSpecificSurfaceArea(double val)
-   {
-       mtp->Asur = val;
-   }
    /// tf:  Advection/diffusion mass transport: time step reduction factor (usually 1)
    void setTimeStepReductionFactor(double val)
    {

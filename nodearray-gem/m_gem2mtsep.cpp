@@ -445,7 +445,7 @@ void TGEM2MT::defaults_FDLi_FDLf()
 void TGEM2MT::math_transport_defaults()
 {
     // from set_def(int q), ask gem2mt users for better defaults
-    memset( &mtp->Msysb, 0, sizeof(double)*20 );
+    memset( &mtp->Msysb1, 0, sizeof(double)*20 );
     memset( mtp->size[0], 0, sizeof(float)*8 );
 
     mtp->nVTKfld = 0;
@@ -455,12 +455,13 @@ void TGEM2MT::math_transport_defaults()
     mtp->ntM =1000;
     mtp->cdv = 1e-9;
     mtp->cez = 1e-12;
+    mtp->tf = 1.;
 
-    mtp->Msysb = 0.;
-    mtp->Vsysb = 0.;
-    mtp->Mwatb = 1.;
-    mtp->Maqb = 1.;
-    mtp->Vaqb = 1.;
+    mtp->Msysb1 = 0.;
+    mtp->Vsysb1 = 0.;
+    mtp->Mwatb1 = 1.;
+    mtp->Maqb1 = 1.;
+    mtp->Vaqb1 = 1.;
 
     // Alloc important arrays
     mtp->DiCp = new long int[ mtp->nC][2];
