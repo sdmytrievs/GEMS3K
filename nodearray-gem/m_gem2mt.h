@@ -382,7 +382,7 @@ class TGEM2MT
 
     void CalcStartScript();
     void CalcControlScript();
-    
+ 
 protected:
 
     void AllocNa();
@@ -918,5 +918,4 @@ typedef enum {  /// Field index into outField structure
 } GEM2MT_DYNAMIC_FIELDS;
 
 #endif //_m_gem2mt_h_
-
 

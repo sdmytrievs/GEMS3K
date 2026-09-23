@@ -21,7 +21,7 @@
 
 #include "m_gem2mt.h"
 #include "GEMS3K/nodearray.h"
-#include "v_service.h"
+#include "GEMS3K/v_service.h"
 
 const double MAXSTEP = 1.7;  // as was initially set - 10 sec is too much for the integrator!
 

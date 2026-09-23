@@ -50,8 +50,6 @@ TGEM2MT::~TGEM2MT()
         delete pa_mt;
 }
 
-//=======================================================================================
-
 //Calculate record
 void TGEM2MT::RecCalc()
 {
@@ -94,7 +92,6 @@ void TGEM2MT::RecCalc()
         throw xcpt;
     }
 }
-
 
 // read TGEM2MT structure from file
 int TGEM2MT::ReadTask(const std::string& gem2mt_file, const std::string& vtk_dir)
@@ -213,259 +210,6 @@ void TGEM2MT::default_VTK(const std::string& work_path)
     prefixVTK = nameVTK;
 }
 
-// Default initialization DiCp
-void TGEM2MT::defaults_DiCp()
-{
-    for(long int ii=0; ii< mtp->nC; ++ii) {
-        mtp->qc = ii; // index of node
-
-        //  Assign different fluid and rock composition indices to nodes (assuming fluid=0 and rock=1)
-        if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
-            // for A or C mode, nodes 0 and 1 contain the initial fluid
-            mtp->DiCp[mtp->qc][0] = (mtp->qc==0 || mtp->qc==1 ? 0 : (mtp->nIV>1 ?  1 : 0 ));
-        }
-        else {
-            // for other modes, one Cauchy source is sufficient
-            // Node 0 contains initial fluid, for more nodes change as: ( qc=0 | qc=XX )
-            mtp->DiCp[mtp->qc][0] = (mtp->qc==0 ? 0 : (mtp->nIV>1 ?  1 : 0));
-        }
-
-        if(mtp->PsMode == RMT_MODE_A || mtp->PsMode == RMT_MODE_C) {
-            // for A and C mode, we need two first nodes as Cauchy sources
-            // for A or C mode, nodes 0 and 1 are set to a constant-flux source
-            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 || mtp->qc==1 ? 3 : 0);
-        }
-        else if(mtp->PsMode == RMT_MODE_B || mtp->PsMode == RMT_MODE_F) {
-            //  for B or F mode, node 0 is set to a constant-flux source
-            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3: 0 );
-            //mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? (mtp->nSFD==1? 0: 3) : 0);
-        }
-        else {
-            // One Cauchy source is sufficient
-            // Node 0 is set as source, for more sources change as: ( qc=0 | qc=XX )
-            mtp->DiCp[mtp->qc][1] = (mtp->qc==0 ? 3 : 0);
-        }
-
-        if(mtp->PsMode == RMT_MODE_B)  {// Random-walk sink fix
-            //  Other nodes normal, the last two set as constant source and sink
-            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-2 ? mtp->DiCp[mtp->qc][1]: 3);
-            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
-        }
-        else {
-            // Other nodes normal, the last one is set as a constant-flux sink
-            mtp->DiCp[mtp->qc][1] = (mtp->qc<mtp->nC-1 ? mtp->DiCp[mtp->qc][1]: -3);
-        }
-    }
-}
-
-// Default initialization HydP
-void TGEM2MT::defaults_HydP()
-{
-    for(long int ii=0; ii< mtp->nC; ++ii) {
-        mtp->qc = ii; // index of node
-
-        if(mtp->HydP && mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
-            //  Initial total volume of the node, m3 (for porosity)
-            mtp->HydP[mtp->qc][0] = mtp->vol_in;
-            //  Initial advection velocity, m/s
-            mtp->HydP[mtp->qc][1] = mtp->fVel;
-            //  Initial effective porosity
-            mtp->HydP[mtp->qc][2] = mtp->eps_in;
-            //  Initial effective permeability
-            mtp->HydP[mtp->qc][3] = mtp->Km_in;
-            //  Initial specific longitudinal dispersivity
-            mtp->HydP[mtp->qc][4] = mtp->al_in;
-            //  Initial general diffusivity
-            mtp->HydP[mtp->qc][5] = mtp->Dif_in;
-            //  Initial tortuosity factor
-            mtp->HydP[mtp->qc][6] = mtp->nto_in;
-        }
-    }
-}
-
-// Default  particle array setup
-void TGEM2MT::defaults_particle_setup()
-{
-    if(mtp->PsMode == RMT_MODE_W) {
-        for(int ii=0; ii< mtp->nPTypes; ++ii) {
-            mtp->NPmean[ii] = 500;
-            mtp->nPmin[ii] = 100;
-            mtp->nPmax[ii] = 1000;
-            mtp->ParTD[ii][0] = ii;
-            mtp->ParTD[ii][1] = MOBILE_C_MASS;
-            mtp->ParTD[ii][2] = DISSOLVED;
-            mtp->ParTD[ii][3] = 0;
-            mtp->ParTD[ii][4] = 0;
-            mtp->ParTD[ii][5] = 0;
-        }
-    }
-}
-
-// Default initialization MGPid, PGT, UMGP, FDLmp, FDLid
-void TGEM2MT::defaults_MGPid_PGT_FDLmp_FDLid(bool mode)
-{
-    long int ii;
-    std::string phName = "Pg1";
-    double xaq= 0.;
-    double xgas = 0.;
-    double xsld = 0.;
-
-    switch(mtp->PsMPh)  {
-    case MGP_TT_AQGF: phName = "flu"; xgas = 1.; xaq = 1.;    // '3'
-        break;
-    case MGP_TT_AQS: phName = "aq"; xaq = 1.;                 // '1'
-        break;
-    case MGP_TT_GASF: phName = "gas"; xgas = 1.;              // '2'
-        break;
-    case MGP_TT_SOLID: phName = "sld"; xsld = 1.;             // '4'
-        break;
-    default: break;
-    }
-    if(mtp->nPG>0 && !(!*mtp->MGPid[0] || *mtp->MGPid[0] == ' ')) {
-        phName = char_array_to_string(mtp->MGPid[0], MAXSYMB);
-        strip(phName);
-    }
-
-    if(mode) {  // only start
-        for(ii=0; ii<mtp->nPG; ++ii) {
-            if(!*mtp->MGPid[ii] || *mtp->MGPid[ii] == ' ' || *mtp->MGPid[ii] == '`') {
-                strncpy(mtp->MGPid[ii], phName.c_str(), MAXSYMB );
-            }
-            for(long int k=0; k<mtp->FIf; ++k) {
-                char PHC_ = na->pCSD()->ccPH[k];
-
-                if(PHC_ == PH_AQUEL) {
-                    mtp->PGT[ii*mtp->FIf+k] = xaq;
-                }
-                else {
-                    if(PHC_ == PH_GASMIX || PHC_ == PH_FLUID || PHC_ == PH_PLASMA) {
-                        mtp->PGT[ii*mtp->FIf+k] = xgas;
-                    }
-                    else {
-                        mtp->PGT[ii*mtp->FIf+k] = xsld;
-                    }
-                }
-            }
-        }
-    }
-
-    if(mtp->UMGP) {
-        for(ii=0; ii<mtp->FIf; ++ii) {
-            if(!mtp->UMGP[ii] || mtp->UMGP[ii] == ' '|| mtp->UMGP[ii] == '`') {
-                mtp->UMGP[ii] = QUAN_MOL;
-            }
-        }
-    }
-
-    if(mtp->PvFDL != S_OFF) {
-        for(ii=0; ii<mtp->nFD; ++ii) {
-            if(!*mtp->FDLmp[ii] || *mtp->FDLmp[ii] == ' ' || *mtp->FDLmp[ii] == '`') {
-                strncpy( mtp->FDLmp[ii], phName.c_str(), MAXSYMB );
-            }
-            if(!*mtp->FDLid[ii] || *mtp->FDLid[ii] == ' ') {
-                strncpy( mtp->FDLid[ii], "qj", MAXSYMB );
-            }
-        }
-    }
-
-}
-
-// Default initialization BSF
-// to be done; temporally all 0
-void TGEM2MT::defaults_BSF()
-{
-    for(long int ii=0; ii<mtp->nSFD; ++ii) {
-        for(long int k=0; k<mtp->Nf; ++k) {
-            mtp->BSF[ii*mtp->Nf+k] = 0.;
-        }
-    }
-}
-
-// Default initialization FDLf, FDLi
-void TGEM2MT::defaults_FDLi_FDLf()
-{
-     // generate fluxes arrays
-    if(mtp->PvFDL != S_OFF /*(nFD > 0) & (qf < nFD)*/)  {
-        for(long int ii=0; ii< mtp->nFD; ++ii) {
-            mtp->jt = std::min(ii, mtp->nC-1);
-            mtp->qc = std::min(ii, mtp->nC-1);  // index of node
-            mtp->qf = std::min(ii, mtp->nFD-1);  // index of flux
-
-            //   initialisation of tables for properties of fluxes
-            if(mtp->qf == mtp->qc) {
-                // Setting the chain of unidirectional fluxes connecting boxes
-                if(mtp->PsMode == RMT_MODE_S) {
-                    // flux from node/box
-                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0? 0: mtp->FDLi[mtp->qf-1][1] );
-                    // flux to node/box
-                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1? mtp->qf+1: -1);
-                    // flux order zero (constant mass per step)
-                    mtp->FDLf[mtp->qf][0] = 0;
-                    // flux rate 1 (the whole fluid mass)
-                    mtp->FDLf[mtp->qf][1] = 1;
-                }
-                if(mtp->PsMode == RMT_MODE_F) {
-                    // flux from node/box
-                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0 ? 0: mtp->FDLi[mtp->qf-1][1] );
-                    // flux to node/box
-                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1 ? mtp->qf+1 : -1);
-                    // flux order 1 (proportional to source MPG mass)
-                    mtp->FDLf[mtp->qf][0] = (mtp->qf==0 ? 0 : 1);
-                    //  flux rate constant
-                    mtp->FDLf[mtp->qf][1] = (mtp->qf==0 ? 1 : 0.1);
-                }
-                if(mtp->PsMode == RMT_MODE_B) {
-                    // flux from node/box
-                    mtp->FDLi[mtp->qf][0] = (mtp->qf==0 ? 0: mtp->FDLi[mtp->qf-1][1]);
-                    // flux to node/box
-                    mtp->FDLi[mtp->qf][1] = (mtp->qf<mtp->nC-1 ? mtp->qf+1 : -1);
-                    // flux order 1 (proportional to source MPG mass)
-                    mtp->FDLf[mtp->qf][0] = (mtp->qf==0 ? 0 : 1);
-                    // flux rate constant
-                    mtp->FDLf[mtp->qf][1] = (mtp->qf==0? 1 : 0.1);
-                }
-            } // end of setting a chain of 1-dir fluxes connecting boxes
-
-            if(mtp->qf > mtp->nC-1 ) {
-                // additional fluxes (elemental remo/prod or arbitrary normal fluxes)
-                //  enter index 0 as MPG name in FDLmp[qf] column
-                //   group for first elemental removal or production row in BSF table
-                if(mtp->qf == mtp->nC) {
-                    mtp->FDLi[mtp->qf][0] = 30;
-                    mtp->FDLi[mtp->qf][1] = (-1);
-                    // flux order (0, 1 or 3), change as desired
-                    mtp->FDLf[mtp->qf][0] = 0;
-                    //  flux rate (constant): >0: removal; <0: production. Change as desired
-                    mtp->FDLf[mtp->qf][1] = 0.001;
-                } //  end of group - add below groups for other remo/prod rows in BSF table
-
-                //  for the second group, enter index 1 as MPG name in FDLmp[qf] column
-                //       if( qf = nC+1 ) {
-                //        .....
-                //     }
-                //  For arbitrary normal MPG fluxes between boxes, add groups like above
-                //  in setting the chain of fluxes
-                //    end of additional fluxes
-
-            } // end of initialization of fluxes
-        }
-    }
-}
-
-// Set default grid coordinate array use predefined sizeLc
-void TGEM2MT::defaults_Grid()
-{
-    long int i, j, k, ndx;
-    LOCATION delta(mtp->sizeLc[0]/na->SizeN(), mtp->sizeLc[1]/na->SizeM(), mtp->sizeLc[2]/na->SizeK());
-    for(i=0; i<na->SizeN(); ++i)
-        for(j=0; j<na->SizeM(); ++j)
-            for(k=0; k<na->SizeK(); ++k) {
-                ndx = na->iNode(i, j, k);
-                mtp->grid[ndx][0] = delta.x*i;
-                mtp->grid[ndx][1] = delta.y*j;
-                mtp->grid[ndx][2] = delta.z*k;
-            }
-}
 
 // Set up math transport default values7sizes in constructor
 void TGEM2MT::math_transport_defaults()
@@ -505,30 +249,6 @@ void TGEM2MT::math_transport_defaults()
     mtp->iStat =  AS_READY;
 }
 
-// Set up default values to arrays after allocation
-void TGEM2MT::init_arrays(bool mode)
-{
-    // setup flags and counters
-    mtp->gStat = GS_INDEF;
-    mtp->iStat = GS_INDEF;
-    mt_reset();
-
-    if(mode)  {
-        for(long int ii=0; ii<mtp->nIV; ++ii) {
-            std::string sname = "System"+std::to_string(ii);
-            strncpy( mtp->nam_i[ii], sname.c_str(), MAXIDNAME );
-        }
-
-        if(mtp->PsMode == RMT_MODE_W) {
-            defaults_particle_setup();
-        }
-    }
-
-    if(mtp->PsMode == RMT_MODE_S || mtp->PsMode == RMT_MODE_F || mtp->PsMode == RMT_MODE_B) {
-        defaults_MGPid_PGT_FDLmp_FDLid(mode);
-    }
-}
-
 // Here we read the MULTI structure, DATACH and DATABR files prepared from GEMS
 int TGEM2MT::gem3k_files_read(const std::string& ipm_lst_file, const std::string& dbr_lst_file)
 {
@@ -550,7 +270,6 @@ int TGEM2MT::gem3k_files_read(const std::string& ipm_lst_file, const std::string
     return 0;
 }
 
-
 // Set up NodeArray and ParticleArray classes after reading gems3k files
 int TGEM2MT::restore_data_from_gems3k(const std::vector<std::string>& dbr_names)
 {
@@ -570,16 +289,13 @@ int TGEM2MT::restore_data_from_gems3k(const std::vector<std::string>& dbr_names)
         // allocate memory and setup default values
         mem_new(0);
         init_arrays(true);
+        // initialization from scripts in GUI
         if(mtp->HydP) {
             defaults_HydP();
-        }
-        if(mtp->PvSFL != S_OFF && mtp->BSF) {
-            defaults_BSF();
         }
         if(mtp->PvGrid != S_OFF && mtp->grid) {
             defaults_Grid();
         }
-        defaults_FDLi_FDLf();
 
         // read names
         std::string name;
@@ -676,10 +392,10 @@ void TGEM2MT::setVTKfields(const std::vector<std::pair<int, int>> &vtk_fields)
 void TGEM2MT::setParticle(long int pndx, long int pmean, long int pmin, long int pmax, const std::array<long int, 6> &pparam)
 {
     if(mtp->PsMode == RMT_MODE_W && pndx<mtp->nPTypes) {
-            mtp->NPmean[pndx] = pmean;
-            mtp->nPmin[pndx] = pmin;
-            mtp->nPmax[pndx] = pmax;
-            std::copy(pparam.begin(), pparam.end(), mtp->ParTD[pndx]);
+        mtp->NPmean[pndx] = pmean;
+        mtp->nPmin[pndx] = pmin;
+        mtp->nPmax[pndx] = pmax;
+        std::copy(pparam.begin(), pparam.end(), mtp->ParTD[pndx]);
     }
 }
 
@@ -948,102 +664,102 @@ void TGEM2MT::mem_kill(int q)
 // realloc dynamic memory
 void TGEM2MT::mem_new(int q)
 {
-  ErrorIf( mtp!=&mt[q], GetName(),
-      "E04GTrem: Attempt to access corrupted dynamic memory.");
+    ErrorIf( mtp!=&mt[q], GetName(),
+            "E04GTrem: Attempt to access corrupted dynamic memory.");
 
- //- mtp->xIC = new long int[mtp->nICb];
- //- mtp->xDC = new long int[mtp->nDCb];
- //- mtp->xPH = new long int[mtp->nPHb];
+    //- mtp->xIC = new long int[mtp->nICb];
+    //- mtp->xDC = new long int[mtp->nDCb];
+    //- mtp->xPH = new long int[mtp->nPHb];
 
- if( mtp->PvGrid == S_OFF )
-   { if(mtp->grid) delete[] mtp->grid;
-     mtp->grid = 0;
-   }
- else
-     mtp->grid = new double[ mtp->nC][3];
+    if( mtp->PvGrid == S_OFF )
+    { if(mtp->grid) delete[] mtp->grid;
+        mtp->grid = 0;
+    }
+    else
+        mtp->grid = new double[ mtp->nC][3];
 
-   if(mtp->PsMode == RMT_MODE_W) {
-       mtp->NPmean = new long int[ mtp->nPTypes];
-       mtp->nPmin = new long int[ mtp->nPTypes];
-       mtp->nPmax = new long int[ mtp->nPTypes];
-       mtp->ParTD = new long int[mtp->nPTypes][6];
-   }
-   else {
-       if(mtp->NPmean) delete[] mtp->NPmean;
-       if(mtp->nPmin) delete[] mtp->nPmin;
-       if(mtp->nPmax) delete[] mtp->nPmax;
-       if(mtp->ParTD) delete[] mtp->ParTD;
-       mtp->NPmean = nullptr;
-       mtp->nPmin = nullptr;
-       mtp->nPmax = nullptr;
-       mtp->ParTD = nullptr;
-   }
+    if(mtp->PsMode == RMT_MODE_W) {
+        mtp->NPmean = new long int[ mtp->nPTypes];
+        mtp->nPmin = new long int[ mtp->nPTypes];
+        mtp->nPmax = new long int[ mtp->nPTypes];
+        mtp->ParTD = new long int[mtp->nPTypes][6];
+    }
+    else {
+        if(mtp->NPmean) delete[] mtp->NPmean;
+        if(mtp->nPmin) delete[] mtp->nPmin;
+        if(mtp->nPmax) delete[] mtp->nPmax;
+        if(mtp->ParTD) delete[] mtp->ParTD;
+        mtp->NPmean = nullptr;
+        mtp->nPmin = nullptr;
+        mtp->nPmax = nullptr;
+        mtp->ParTD = nullptr;
+    }
 
- mtp->nam_i= new char[mtp->nIV][ MAXIDNAME ];
- //- mtp->PTVm = new double[ mtp->nIV][5];
- if(!mtp->DiCp) { // could be allocated in constructor
-     mtp->DiCp = new long int[ mtp->nC][2];
- }
- //- mtp->StaP = new double[ mtp->nC ][4];
+    mtp->nam_i= new char[mtp->nIV][ MAXIDNAME ];
+    //- mtp->PTVm = new double[ mtp->nIV][5];
+    if(!mtp->DiCp) { // could be allocated in constructor
+        mtp->DiCp = new long int[ mtp->nC][2];
+    }
+    //- mtp->StaP = new double[ mtp->nC ][4];
 
- if(mtp->PvnVTK == S_OFF) {
-     if(mtp->xVTKfld) {
-         delete[] mtp->xVTKfld;
-         mtp->xVTKfld = nullptr;
-     }
- }
- else {
-     if(!mtp->xVTKfld) { // could be allocated in function setVTKfields
-         mtp->xVTKfld = new long int[mtp->nVTKfld][2];
-     }
- }
+    if(mtp->PvnVTK == S_OFF) {
+        if(mtp->xVTKfld) {
+            delete[] mtp->xVTKfld;
+            mtp->xVTKfld = nullptr;
+        }
+    }
+    else {
+        if(!mtp->xVTKfld) { // could be allocated in function setVTKfields
+            mtp->xVTKfld = new long int[mtp->nVTKfld][2];
+        }
+    }
 
- //- mtp->stld = new char[ mtp->nIV ][EQ_RKLEN];
- mtp->Tval  = new double[ mtp->nTai ];
- mtp->Pval  = new double[ mtp->nPai ];
- //- mtp->Bn = new double[ mtp->nIV][ mtp->Nb ];
- //- mtp->SBM = new char [ mtp->Nb][MAXICNAME+MAXSYMB];
+    //- mtp->stld = new char[ mtp->nIV ][EQ_RKLEN];
+    mtp->Tval  = new double[ mtp->nTai ];
+    mtp->Pval  = new double[ mtp->nPai ];
+    //- mtp->Bn = new double[ mtp->nIV][ mtp->Nb ];
+    //- mtp->SBM = new char [ mtp->Nb][MAXICNAME+MAXSYMB];
 
- if(mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
-     mtp->HydP = new double[mtp->nC][SIZE_HYDP];
- }
- else {
-     if(mtp->HydP) delete[] mtp->HydP;
-     mtp->HydP = nullptr;
- }
+    if(mtp->PsMode != RMT_MODE_S  && mtp->PsMode != RMT_MODE_F && mtp->PsMode != RMT_MODE_B) {
+        mtp->HydP = new double[mtp->nC][SIZE_HYDP];
+    }
+    else {
+        if(mtp->HydP) delete[] mtp->HydP;
+        mtp->HydP = nullptr;
+    }
 
- //-if( mtp->PvICi == S_OFF )
- //-   {
- //-    if(mtp->CIb) delete[] mtp->CIb;
- //-    if(mtp->CIclb) delete[] mtp->CIclb;
- //-    mtp->CIb = 0;
- //-    mtp->CIclb = 0;
- //-   }
- //-   else
- //-   {
- //-    mtp->CIb = new double[ mtp->nIV][mtp->Nb];
- //-    mtp->CIclb =  new char[ mtp->Nb ];
- //-   }
+    //-if( mtp->PvICi == S_OFF )
+    //-   {
+    //-    if(mtp->CIb) delete[] mtp->CIb;
+    //-    if(mtp->CIclb) delete[] mtp->CIclb;
+    //-    mtp->CIb = 0;
+    //-    mtp->CIclb = 0;
+    //-   }
+    //-   else
+    //-   {
+    //-    mtp->CIb = new double[ mtp->nIV][mtp->Nb];
+    //-    mtp->CIclb =  new char[ mtp->Nb ];
+    //-   }
 
- //- if( mtp->PvAUi == S_OFF )
- //-    {
- //-     if(mtp->CAb) delete[] mtp->CAb;
- //-      if(mtp->for_i) delete[] mtp->for_i;
- //-      if(mtp->AUcln) delete[] mtp->AUcln;
- //-      if(mtp->An) delete[] mtp->An;
- //-      mtp->CAb = 0;
- //-      mtp->for_i = 0;
- //-      mtp->AUcln = 0;
- //-      mtp->An = 0;
- //-      mtp->Lbi = 0;
- //-    }
- //-    else
- //-    {
- //-      mtp->CAb = new double[ mtp->nIV][ mtp->Lbi ];
- //-      mtp->for_i = new char[ mtp->Lbi][ MAXFORMUNITDT ];
- //-      mtp->AUcln = new char[ mtp->Lbi ];
- //-      mtp->An = new double[ mtp->Lbi][ mtp->Nb ];
- //-   }
+    //- if( mtp->PvAUi == S_OFF )
+    //-    {
+    //-     if(mtp->CAb) delete[] mtp->CAb;
+    //-      if(mtp->for_i) delete[] mtp->for_i;
+    //-      if(mtp->AUcln) delete[] mtp->AUcln;
+    //-      if(mtp->An) delete[] mtp->An;
+    //-      mtp->CAb = 0;
+    //-      mtp->for_i = 0;
+    //-      mtp->AUcln = 0;
+    //-      mtp->An = 0;
+    //-      mtp->Lbi = 0;
+    //-    }
+    //-    else
+    //-    {
+    //-      mtp->CAb = new double[ mtp->nIV][ mtp->Lbi ];
+    //-      mtp->for_i = new char[ mtp->Lbi][ MAXFORMUNITDT ];
+    //-      mtp->AUcln = new char[ mtp->Lbi ];
+    //-      mtp->An = new double[ mtp->Lbi][ mtp->Nb ];
+    //-   }
 
     if(mtp->PvFDL == S_OFF) {
         if(mtp->FDLi) delete[] mtp->FDLi;
@@ -1071,127 +787,127 @@ void TGEM2MT::mem_new(int q)
         }
     }
 
-  if(mtp->PvPGD == S_OFF) {
-      if(mtp->PGT) delete[] mtp->PGT;
-      if(mtp->MGPid) delete[] mtp->MGPid;
-      if(mtp->UMGP) delete[] mtp->UMGP;
-      mtp->PGT = nullptr;
-      mtp->MGPid = nullptr;
-      mtp->UMGP = nullptr;
-      mtp->nPG = 0;
-  }
-  else  {
-      mtp->PGT  =  new double[ mtp->FIf*mtp->nPG ];
-      mtp->MGPid = new char[ mtp->nPG ][MAXSYMB];
-      mtp->UMGP = new char[ mtp->FIf ];
-      for(long int ii=0; ii<mtp->nPG; ++ii) {
-          fillValue(mtp->MGPid[ii], '\0', MAXSYMB);
-      }
-      for(long int ii=0; ii<mtp->FIf; ++ii) {
-          mtp->UMGP[ii] = ' ';
-      }
-  }
+    if(mtp->PvPGD == S_OFF) {
+        if(mtp->PGT) delete[] mtp->PGT;
+        if(mtp->MGPid) delete[] mtp->MGPid;
+        if(mtp->UMGP) delete[] mtp->UMGP;
+        mtp->PGT = nullptr;
+        mtp->MGPid = nullptr;
+        mtp->UMGP = nullptr;
+        mtp->nPG = 0;
+    }
+    else  {
+        mtp->PGT  =  new double[ mtp->FIf*mtp->nPG ];
+        mtp->MGPid = new char[ mtp->nPG ][MAXSYMB];
+        mtp->UMGP = new char[ mtp->FIf ];
+        for(long int ii=0; ii<mtp->nPG; ++ii) {
+            fillValue(mtp->MGPid[ii], '\0', MAXSYMB);
+        }
+        for(long int ii=0; ii<mtp->FIf; ++ii) {
+            mtp->UMGP[ii] = ' ';
+        }
+    }
 
- if( mtp->PvSFL == S_OFF )
-  { if(mtp->BSF) delete[] mtp->BSF;
-    mtp->BSF = 0;
-  }
-   else
-      mtp->BSF = new double[ mtp->nSFD*mtp->Nf ];
+    if( mtp->PvSFL == S_OFF )
+    { if(mtp->BSF) delete[] mtp->BSF;
+        mtp->BSF = 0;
+    }
+    else
+        mtp->BSF = new double[ mtp->nSFD*mtp->Nf ];
 
-  if(mtp->PvPGD != S_OFF && mtp->PvFDL != S_OFF) {
-      mtp->MB =  new double[mtp->nC*mtp->Nf];
-      mtp->dMB = new double[mtp->nC*mtp->Nf];
-  }
-  else {
-      if(mtp->MB) delete[] mtp->MB;
-      if(mtp->dMB) delete[] mtp->dMB;
-      mtp->MB = nullptr;
-      mtp->dMB = nullptr;
-  }
-   if( mtp->PvDDc == S_OFF )
-   {
-     if(mtp->DDc) delete[] mtp->DDc;
-     mtp->DDc = 0;
-   }
-   else
-     mtp->DDc = new double[mtp->Lsf];
+    if(mtp->PvPGD != S_OFF && mtp->PvFDL != S_OFF) {
+        mtp->MB =  new double[mtp->nC*mtp->Nf];
+        mtp->dMB = new double[mtp->nC*mtp->Nf];
+    }
+    else {
+        if(mtp->MB) delete[] mtp->MB;
+        if(mtp->dMB) delete[] mtp->dMB;
+        mtp->MB = nullptr;
+        mtp->dMB = nullptr;
+    }
+    if( mtp->PvDDc == S_OFF )
+    {
+        if(mtp->DDc) delete[] mtp->DDc;
+        mtp->DDc = 0;
+    }
+    else
+        mtp->DDc = new double[mtp->Lsf];
 
-   if( mtp->PvDIc == S_OFF )
-   {
-     if(mtp->DIc) delete[] mtp->DIc;
-     mtp->DIc = 0;
-   }
-   else
-       mtp->DIc = new double[ mtp->Nf ];
+    if( mtp->PvDIc == S_OFF )
+    {
+        if(mtp->DIc) delete[] mtp->DIc;
+        mtp->DIc = 0;
+    }
+    else
+        mtp->DIc = new double[ mtp->Nf ];
 
-   if( mtp->nEl <= 0  )
-   {
-     if(mtp->DEl) delete[] mtp->DEl;
-     if(mtp->for_e) delete[] mtp->for_e;
-   //-   if(mtp->Ae) delete[] mtp->Ae;
-     mtp->DEl = 0;
-     mtp->for_e = 0;
-   //-   mtp->Ae = 0;
-     mtp->nEl = 0;
-   }
-   else
-   {
-       mtp->DEl = new double[ mtp->nEl ];
-       mtp->for_e = new char[mtp->nEl][MAXFORMUNITDT];
-   //-     mtp->Ae = new double[ mtp->nEl*mtp->Nb ];
-   }
+    if( mtp->nEl <= 0  )
+    {
+        if(mtp->DEl) delete[] mtp->DEl;
+        if(mtp->for_e) delete[] mtp->for_e;
+        //-   if(mtp->Ae) delete[] mtp->Ae;
+        mtp->DEl = 0;
+        mtp->for_e = 0;
+        //-   mtp->Ae = 0;
+        mtp->nEl = 0;
+    }
+    else
+    {
+        mtp->DEl = new double[ mtp->nEl ];
+        mtp->for_e = new char[mtp->nEl][MAXFORMUNITDT];
+        //-     mtp->Ae = new double[ mtp->nEl*mtp->Nb ];
+    }
 
-//----------------------------------------------------------------
-   //- if( mtp->Nqpt > 0  )
-   //-  mtp->qpi   = new double[mtp->Nqpt];
-   //- else
-   //- { if(mtp->qpi) delete[] mtp->qpi; mtp->qpi = 0;}
+    //----------------------------------------------------------------
+    //- if( mtp->Nqpt > 0  )
+    //-  mtp->qpi   = new double[mtp->Nqpt];
+    //- else
+    //- { if(mtp->qpi) delete[] mtp->qpi; mtp->qpi = 0;}
 
-   //- if( mtp->Nqpg > 0  )
-   //-  mtp->qpc   = new double[mtp->Nqpg];
-   //- else
-   //- { if(mtp->qpc) delete[] mtp->qpc; mtp->qpc = 0;}
+    //- if( mtp->Nqpg > 0  )
+    //-  mtp->qpc   = new double[mtp->Nqpg];
+    //- else
+    //- { if(mtp->qpc) delete[] mtp->qpc; mtp->qpc = 0;}
 
-   //- if( mtp->PvMSt == S_OFF )
-   //- { if(mtp->tExpr) delete[] mtp->tExpr; mtp->tExpr = 0;}
-   //- else
-   //-    mtp->tExpr = new char[4096];
+    //- if( mtp->PvMSt == S_OFF )
+    //- { if(mtp->tExpr) delete[] mtp->tExpr; mtp->tExpr = 0;}
+    //- else
+    //-    mtp->tExpr = new char[4096];
 
-   //-if( mtp->PvMSg == S_OFF )
-   //-   {
-   //-    if(mtp->lNam) delete[] mtp->lNam;
-   //-    if(mtp->gExpr) delete[] mtp->gExpr;
-   //-    if(mtp->xt) delete[] mtp->xt;
-   //-    if(mtp->yt) delete[] mtp->yt;
-   //-    mtp->lNam = 0;
-   //-    mtp->gExpr = 0;
-   //-    mtp->xt = 0;
-   //-    mtp->yt = 0;
-   //-   }
-   //-   else
-   //-   {
-   //-        mtp->lNam = new char[ mtp->nYS][ MAXGRNAME];
-   //-        mtp->gExpr = new char[2048];
-   //-        mtp->xt   = new double[ mtp->nC];
-   //-        mtp->yt   = new double[ mtp->nC*mtp->nYS];
-   //-   }
+    //-if( mtp->PvMSg == S_OFF )
+    //-   {
+    //-    if(mtp->lNam) delete[] mtp->lNam;
+    //-    if(mtp->gExpr) delete[] mtp->gExpr;
+    //-    if(mtp->xt) delete[] mtp->xt;
+    //-    if(mtp->yt) delete[] mtp->yt;
+    //-    mtp->lNam = 0;
+    //-    mtp->gExpr = 0;
+    //-    mtp->xt = 0;
+    //-    mtp->yt = 0;
+    //-   }
+    //-   else
+    //-   {
+    //-        mtp->lNam = new char[ mtp->nYS][ MAXGRNAME];
+    //-        mtp->gExpr = new char[2048];
+    //-        mtp->xt   = new double[ mtp->nC];
+    //-        mtp->yt   = new double[ mtp->nC*mtp->nYS];
+    //-   }
 
-   //-if( mtp->PvEF == S_OFF )
-   //-   {
-   //-    if(mtp->lNamE) delete[] mtp->lNamE;
-   //-    if(mtp->xEt) delete[] mtp->xEt;
-   //-    if(mtp->yEt) delete[] mtp->yEt;
-   //-    mtp->lNamE = 0;
-   //-    mtp->xEt = 0;
-   //-    mtp->yEt = 0;
-   //-   }
-   //-   else
-   //-   {
-   //-     mtp->lNamE = new char[ mtp->nYE][ MAXGRNAME];
-   //-     mtp->xEt   = new double[ mtp->nE ];
-   //-     mtp->yEt   = new double[ mtp->nE*mtp->nYE ];
-   //-   }
+    //-if( mtp->PvEF == S_OFF )
+    //-   {
+    //-    if(mtp->lNamE) delete[] mtp->lNamE;
+    //-    if(mtp->xEt) delete[] mtp->xEt;
+    //-    if(mtp->yEt) delete[] mtp->yEt;
+    //-    mtp->lNamE = 0;
+    //-    mtp->xEt = 0;
+    //-    mtp->yEt = 0;
+    //-   }
+    //-   else
+    //-   {
+    //-     mtp->lNamE = new char[ mtp->nYE][ MAXGRNAME];
+    //-     mtp->xEt   = new double[ mtp->nE ];
+    //-     mtp->yEt   = new double[ mtp->nE*mtp->nYE ];
+    //-   }
 
     if( mtp->Nsd > 0 )
     {
@@ -1200,10 +916,10 @@ void TGEM2MT::mem_new(int q)
     }
     else
     {
-      if(mtp->sdref) delete[] mtp->sdref;
-      if(mtp->sdval) delete[] mtp->sdval;
-      mtp->sdref = 0;
-      mtp->sdval = 0;
+        if(mtp->sdref) delete[] mtp->sdref;
+        if(mtp->sdval) delete[] mtp->sdval;
+        mtp->sdref = 0;
+        mtp->sdval = 0;
     }
     //- mtp->etext = new char[4096];
     //- mtp->tprn = new char[2048];
