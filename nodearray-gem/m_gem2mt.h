@@ -82,7 +82,7 @@ typedef struct
    PvDDc,    //  Use diffusion coefficients for DC - DDc vector (+ -)
    PvDIc,    //  Use diffusion coefficients for IC - DIc vector (+ -)
    PvDCH,    //  Select ICs, DCs and phases to be exchanged via DATABR file (take all, if unchecked) (+ -)?
-   PvnVTK,   //  Use selected fields to VTK format (+ -)?
+   PvnVTK,   // Use selected fields to VTK format (+ -)?
    PvMSc,    // Use math script for control on time steps (+ -)?
 
      // Controls on operation (14)
@@ -117,7 +117,7 @@ typedef struct
    nSFD,   // number of elemental source flux definitions (0 or >= 1 )
    nEl,   // number of electrolytes for setting up electrolyte diffusion coefficients in mDEl vector
    nPTypes,     // res Number of allocated particle types (< 20 ? )
-   nProps,      // res Number of particle statistic properties (for monitoring) >= anPTypes
+   nProps,      // res Number of particle statistic properties (for monitoring) >= anPTypes (now not used in particlearray)
    Lbi,  // Lb - number of formula units to set compositions in initial variants
    Nsd,  // N of references to data sources
    Nqpt, // Number of elements in the script work array qpi for transport
@@ -137,9 +137,9 @@ typedef struct
   // These dimensionalities define sizes of dynamic data in DATABR structure!!!
   // Needed to reduce on storage demand for data bridge instances (nodes)!
   // Connection occurs through xIC, xPH and xDC lists!
-    nICb,       // number of stoichiometry units (<= nIC) used in the data bridge
-    nDCb,      	// number of DC (chemical species, <= nDC) used in the data bridge
-    nPHb,     	// number of phases (<= nPH) used in the data bridge
+    nICb1,       // number of stoichiometry units (<= nIC) used in the data bridge
+    nDCb1,      	// number of DC (chemical species, <= nDC) used in the data bridge
+    nPHb1,     	// number of phases (<= nPH) used in the data bridge
     Nf,       // nICb number of ICs in  (DATABR) for setting box-fluxes
     FIf,      // nPHb number of phases in (DATABR) for setting box-fluxes
     nVTKfld, //  Number of selected fields to VTK format
@@ -466,7 +466,16 @@ protected:
     // returns current (possibly reduced) step value or negative value in case of error
    double INTEG( double eps, double step, double t_begin, double t_end );
 
-   public:
+    void math_transport_defaults();
+    void defaults_DiCp();
+    void defaults_HydP();
+    void defaults_particle_setup();
+    void defaults_MGPid_PGT_FDLmp_FDLid(bool mode);
+    void defaults_FDLi_FDLf();
+    void defaults_BSF();
+    void defaults_Grid();
+
+public:
 
     static TGEM2MT* pm;
     
@@ -524,6 +533,8 @@ protected:
    int restore_data_from_gems3k(const std::vector<std::string>& dbr_names);
    int gems3k_strings(const std::string &dch_json, const std::string &ipm_json, const std::vector<std::string> &dbr_json);
 
+   // (1)  Task definition
+
    /// Get the full name of this GEM2MT task
    std::string name() const
    {
@@ -548,27 +559,46 @@ protected:
        mtp->name[MAXFORMULA-1]='\0';
    }
 
-   // (1) Allocation and setup flags
-   /// PvMSt,    // Use math script for start setup (+ -)?
-   /// PvMSg,    // Use math script for graphic presentation (+ -)?
-   /// PvMSc,    // Use math script for control on time steps (+ -)?
+   // (2) Allocation and setup flags
 
-   /// PvPGD: Use mobile phase groups definitions (+ -) (default -)
-   //  posible for type or if array
-   /// PvFDL: Use MGP flux definition list (+ -) (default -)
-   //  posible for type or if array
-   /// PvSFL: Use source fluxes and elemental stoichiometries for them (+ -) (default -)
-   //  posible for type or if array
-   /// PvGrid: Use array of grid point locations (+ -)
-   //  posible for type or if array
-   /// PvDDc:  Use diffusion coefficients for DC - DDc vector (+ -) (default -)
-   //   <PvDDc>  '-'  saved to data_CH->DD;  but mode in calculation important
-   ///  PvDIc:  Use diffusion coefficients for IC - DIc vector (+ -) (default -)
-   //   <PvDIc>  '-'  not used array in standalone but mode in calculation important
-   ///  PvnVTK: Use selected fields to VTK format (+ -) (default -)
-   // Would be selected after define xVTKfld as parameters
+   /// PvGrid: Use array of grid point locations (+ -) (default -)
+   void useArrayGridPoints(bool enable)
+   {
+       if(enable) {
+           mtp->PvGrid = S_ON;
+       }
+       else {
+           mtp->PvGrid = S_OFF;
+       }
+   }
 
-   // (2) Controls on operation
+   /// PvDDc: Use diffusion coefficients for DC - DDc vector (+ -) (default -)
+   void usePvDDc(bool enable)
+   {
+       if(enable) {
+           mtp->PvDDc = S_ON;
+       }
+       else {
+           mtp->PvDDc = S_OFF;
+       }
+   }
+
+   /// PvDIc: Use diffusion coefficients for IC - DIc vector (+ -) (default -)
+   void usePvDIc(bool enable)
+   {
+       if(enable) {
+           mtp->PvDIc = S_ON;
+       }
+       else {
+           mtp->PvDIc = S_OFF;
+       }
+   }
+
+   // (3) Controls on operation
+   /// PvMSt,    // ? Use math script for start setup (+ -)?    callback to update internal
+   /// PvMSg,    // ? Use math script for graphic presentation (+ -)?  callback to collect graphic data
+   /// PvMSc,    // ?  Use math script for control on time steps (+ -)?  CalcControlScript
+
    /// PsSIA: Use smart initial approximation in GEM IPM (+); SIA internal (*); AIA (-)
    void setSIA(char flag)
    {
@@ -585,7 +615,8 @@ protected:
    }
 
    /// PsMO: Use non stop debug output for nodes (+ -) (default +)
-   void setOutput(bool enable) {
+   void setOutput(bool enable)
+   {
        if(enable) {
            mtp->PsMO = S_ON;
        }
@@ -593,8 +624,10 @@ protected:
            mtp->PsMO = S_OFF;
        }
    }
+
    /// PsVTK: Use non stop debug output nodes to VTK format(+ -) (default -)
-   void setOutVTK(bool enable) {
+   void setOutVTK(bool enable)
+   {
        if(enable) {
            mtp->PsVTK = S_ON;
        }
@@ -619,7 +652,7 @@ protected:
        }
    }
 
-   // (3) Dimensions for gem2mt (memory allocation)
+   // (4) Dimensions for gem2mt (memory allocation)
 
    /// nC:  Input number of local equilibrium cells (nodes)
    long int nNodes() const
@@ -641,37 +674,53 @@ protected:
    {
        return mtp->nSFD;
    }
-   /// FIf:  Number of phases in (DATABR) for setting box-fluxes
-   long int nPhases() const
-   {
-       return mtp->FIf;
-   }
-
    /// nPTypes:  Number of allocated particle types < 20
    long int nParticleTypes()
    {
        return mtp->nPTypes;
    }
 
-   /// nMGP:  Number of mobile groups of phases, nMGP >= 0
+   /// FIf:  Number of phases in (DATABR) for setting box-fluxes
+   long int nPhases() const
+   {
+       return mtp->FIf;
+   }
+   /// Nf:  Number of ICs in (DATABR) for setting box-fluxes
+   long int nElements() const
+   {
+       return mtp->Nf;
+   }
+   /// Lsf: of DCs in phases-solutions in Multi (DATACH) for setting box-fluxes
+   long int nComponents() const
+   {
+       return mtp->FIf;
+   }
+
+   /// Define the number of mobile groups of phases, nMGP >= 0
    void setNumberPhaseGroups(long int num)
    {
        mtp->nPG = num;
-       mtp->PvPGD = S_ON;
+       mtp->PvPGD = (num>0 ? S_ON: S_OFF);
    }
-
+   /// Define the number of elemental source flux definitions, nSFD >= 0
+   void setNumberICsourceFluxes(long int num)
+   {
+       mtp->nSFD = num;
+       mtp->PvSFL = (num>0 ? S_ON: S_OFF);
+   }
    /// nFD: Number of MGP fluxes defined in the megasystem, nFD >= 0
    void setNumberMGPfluxes(long int num)
    {
        mtp->nFD = num;
-       mtp->PvFDL = S_ON;
+       mtp->PvFDL = (num>0 ? S_ON: S_OFF);
    }
-
-   /// nPTypes:  Number of allocated particle types < 20
+   /// Define number of allocated particle types (<20)
    void setNumberParticleTypes(long int num)
    {
-       mtp->nPTypes = num;
+       mtp->nPTypes = (num>0 ? S_ON: S_OFF);
    }
+
+   // (5) Inital scalars and iterators
 
    /// Tau:   Physical time iterator (start,end,step)
    void setTau(double start, double end, double step)
@@ -689,8 +738,6 @@ protected:
        mtp->sizeLc[2]=z;
    }
 
-
-   // (4) Input for compositions of initial systems
    /// tf:  Advection/diffusion mass transport: time step reduction factor (usually 1)
    void setTimeStepReductionFactor(double val)
    {
@@ -742,7 +789,8 @@ protected:
        mtp->cez = val;
    }
 
-   // (5) Initialize/change defaults for arrays
+   // (6) Initialize/change defaults for arrays
+
    /// DiCp:  Change array of indexes of initial system variants for distributing to nodes [nC]
    void setDistributing(long int node_ndx, long int sys_ndx)
    {
@@ -788,13 +836,18 @@ protected:
 
    // Use phase groups definitions
    /// MGPid: ID list of mobile phase groups
-   void setPhaseGroupsID(long int  pndx, const std::string& ids);
+   void setPhaseGroupsID(long int  gndx, const std::string& ids);
    /// UMGP: [nFi] units for setting phase quantities in MGP (see PGT )
    void setUnitsPhaseQuantities(long int  pndx, char units);
    /// PGT: Quantities of phases in MGP [Fi][nPG]
    /// @param gndx: phase groups index
    /// @param pndx: phase index
    void setPhaseGroupsQuantities(long int gndx, long int pndx, double quantity);
+
+   /// BSF: table of bulk compositions of elemental fluxes [nSFD][Nf]
+   /// @param gndx: groups index
+   /// @param indx: element index
+   void setICsourceQuantities(long int gndx, long int indx, double quantity);
 
    /// FDLi: Set Source/Receive box index in the flux definition
    void setFluxSourceReceive(long int  pndx, long int  source, long int  receive);
@@ -807,15 +860,16 @@ protected:
    /// FDLid: Set IDs of fluxes
    void setFluxIDs(long int  pndx, const std::string& ids);
 
+   /// Set grid point location, size is nC [grid]
+   /// @param pndx: index in array
+   /// @param x: Array of initial mean particle type numbers per node
+   /// @param y: Minimum average total number of particles of each type per one node
+   /// @param z: Maximum average total number of particles of each type per one node
+   void setGridPoint(long int pndx, double x,  double y,  double z);
+
    /// xFlds: Set list of selected fields and indexes to VTK format
    void setVTKfields(const std::vector<std::pair<int, int>>& vtk_fields);
 
-   void math_transport_defaults();
-   void defaults_DiCp();
-   void defaults_HydP();
-   void defaults_FDLi_FDLf();
-   void defaults_particle_setup();
-   void defaults_MGPid_PGT_FDLmp_FDLid(bool mode);
 };
 
 enum gem2mt_inernal {

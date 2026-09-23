@@ -62,9 +62,9 @@ int main( int argc, char* argv[] )
         //return task_A(ipm_lst, dbr_lst);
         //return task_C(ipm_lst, dbr_lst);
         //return task_W(ipm_lst, dbr_lst);
-        //return task_F("TestF/CalcColumn-dat.lst", "TestF/CalcColumn-dbr.lst");
+        return task_F("TestF/CalcColumn-dat.lst", "TestF/CalcColumn-dbr.lst");
         //return task_S("TestS/CalcColumn-dat.lst", "TestS/CalcColumn-dbr.lst");
-        return task_B("TestB/CalcColumn-dat.lst", "TestB/CalcColumn-dbr.lst");
+        //return task_B("TestB/CalcColumn-dat.lst", "TestB/CalcColumn-dbr.lst");
     }
     catch(TError& err) {
         TNode::ipmlog_file->error("Error {} : {}", err.title, err.mess);

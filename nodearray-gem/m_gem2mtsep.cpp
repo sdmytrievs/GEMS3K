@@ -301,7 +301,7 @@ void TGEM2MT::defaults_particle_setup()
     }
 }
 
-// Default initialization MGPid, PGT, FDLmp, FDLid
+// Default initialization MGPid, PGT, UMGP, FDLmp, FDLid
 void TGEM2MT::defaults_MGPid_PGT_FDLmp_FDLid(bool mode)
 {
     long int ii;
@@ -368,6 +368,17 @@ void TGEM2MT::defaults_MGPid_PGT_FDLmp_FDLid(bool mode)
         }
     }
 
+}
+
+// Default initialization BSF
+// to be done; temporally all 0
+void TGEM2MT::defaults_BSF()
+{
+    for(long int ii=0; ii<mtp->nSFD; ++ii) {
+        for(long int k=0; k<mtp->Nf; ++k) {
+            mtp->BSF[ii*mtp->Nf+k] = 0.;
+        }
+    }
 }
 
 // Default initialization FDLf, FDLi
@@ -439,6 +450,21 @@ void TGEM2MT::defaults_FDLi_FDLf()
             } // end of initialization of fluxes
         }
     }
+}
+
+// Set default grid coordinate array use predefined sizeLc
+void TGEM2MT::defaults_Grid()
+{
+    long int i, j, k, ndx;
+    LOCATION delta(mtp->sizeLc[0]/na->SizeN(), mtp->sizeLc[1]/na->SizeM(), mtp->sizeLc[2]/na->SizeK());
+    for(i=0; i<na->SizeN(); ++i)
+        for(j=0; j<na->SizeM(); ++j)
+            for(k=0; k<na->SizeK(); ++k) {
+                ndx = na->iNode(i, j, k);
+                mtp->grid[ndx][0] = delta.x*i;
+                mtp->grid[ndx][1] = delta.y*j;
+                mtp->grid[ndx][2] = delta.z*k;
+            }
 }
 
 // Set up math transport default values7sizes in constructor
@@ -546,6 +572,12 @@ int TGEM2MT::restore_data_from_gems3k(const std::vector<std::string>& dbr_names)
         init_arrays(true);
         if(mtp->HydP) {
             defaults_HydP();
+        }
+        if(mtp->PvSFL != S_OFF && mtp->BSF) {
+            defaults_BSF();
+        }
+        if(mtp->PvGrid != S_OFF && mtp->grid) {
+            defaults_Grid();
         }
         defaults_FDLi_FDLf();
 
@@ -664,10 +696,10 @@ void TGEM2MT::setHydraulicParameters(long pndx, double Vt, double vp, double eps
     }
 }
 
-void TGEM2MT::setPhaseGroupsID(long pndx, const std::string &ids)
+void TGEM2MT::setPhaseGroupsID(long gndx, const std::string &ids)
 {
-    if(mtp->MGPid && pndx<mtp->nPG) {
-        strncpy( mtp->MGPid[pndx], ids.c_str(), MAXSYMB);
+    if(mtp->MGPid && gndx<mtp->nPG) {
+        strncpy( mtp->MGPid[gndx], ids.c_str(), MAXSYMB);
     }
 }
 
@@ -682,6 +714,13 @@ void TGEM2MT::setPhaseGroupsQuantities(long gndx, long pndx, double quantity)
 {
     if(mtp->MGPid && gndx<mtp->nPG && pndx<mtp->FIf) {
         mtp->PGT[gndx*mtp->FIf+pndx] = quantity;
+    }
+}
+
+void TGEM2MT::setICsourceQuantities(long gndx, long indx, double quantity)
+{
+    if(mtp->MGPid && gndx<mtp->nSFD && indx<mtp->Nf) {
+        mtp->BSF[gndx*mtp->Nf+indx] = quantity;
     }
 }
 
@@ -706,6 +745,15 @@ void TGEM2MT::setFluxIDs(long pndx, const std::string &ids)
 {
     if(mtp->FDLid && pndx<mtp->nFD) {
         strncpy( mtp->FDLid[pndx], ids.c_str(), MAXSYMB);
+    }
+}
+
+void TGEM2MT::setGridPoint(long pndx, double x, double y, double z)
+{
+    if(mtp->grid && pndx<mtp->nC) {
+        mtp->grid[pndx][0] = x;
+        mtp->grid[pndx][1] = y;
+        mtp->grid[pndx][2] = z;
     }
 }
 
